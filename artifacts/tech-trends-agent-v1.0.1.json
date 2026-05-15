@@ -1,30 +1,30 @@
 {
   "artifact_schema": "1.0",
   "agent_name": "tech-trends-agent",
-  "foundry_version_id": "tech-trends-agent:1",
+  "foundry_version_id": "tech-trends-agent:2",
   "semver": "1.0.1",
   "git": {
-    "commit_sha": "378444e82194d8e69ab7a777622b99f54823dd52",
-    "short_sha": "378444e",
+    "commit_sha": "b6b3281e4bf7f2c2700342b80476a9e7a4747f69",
+    "short_sha": "b6b3281",
     "branch": "main",
     "tag": "refs/heads/main",
-    "timestamp": "2026-05-15T16:09:11.011881+00:00"
+    "timestamp": "2026-05-15T19:40:39.254207+00:00"
   },
   "definition": {
-    "model": "gpt-4o-2024-11-20",
+    "model": "gpt-4o",
     "instructions_file": "prompts/tech-trends-agent.md",
-    "instructions_hash": "sha256:4f0feb89f4a5d73a3990c9819c0ff7b23cc2b4bcd12fd9681270ecc7972a83c8",
+    "instructions_hash": "sha256:addc8c0cbfd91133369ef81faee5e762df1a8ac8237bc95e76d0ed1d0ba95891",
     "tools": [
       {
-        "type": "web_search"
+        "type": "code_interpreter"
       }
     ]
   },
-  "description": "Tech Trend Research Agent | tools: web_search | model: gpt-4o-2024-11-20 | commit: 378444e | v1.0.1",
+  "description": "Tech Trend Research Agent | tools: code_interpreter | model: gpt-4o | commit: b6b3281 | v1.0.1",
   "deployment": {
     "environment": "prod",
     "foundry_endpoint": "https://foundry-demo-sc-dev.services.ai.azure.com/api/projects/foundry-project2",
-    "deployed_at": "2026-05-15T16:09:11.011973+00:00",
+    "deployed_at": "2026-05-15T19:40:39.254290+00:00",
     "deployed_by": "github-actions"
   }
 }
