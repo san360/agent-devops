@@ -41,8 +41,9 @@ jobs:
           from azure.ai.projects import AIProjectClient
           from azure.identity import DefaultAzureCredential
           client = AIProjectClient(endpoint=os.environ['FOUNDRY_PROD_ENDPOINT'], credential=DefaultAzureCredential())
-          agent = client.agents.get_agent('tech-trends-agent')
-          print(agent.version)
+          versions = client.agents.list_versions(agent_name='tech-trends-agent')
+          latest = max(versions, key=lambda v: int(v.version))
+          print(latest.version)
           ")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 

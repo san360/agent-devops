@@ -37,9 +37,8 @@ ACCOUNT_NAME=""
 GITHUB_REPO="san360/agent-devops"
 GPT_MODEL_NAME="gpt-4o"
 GPT_MODEL_VERSION="2024-11-20"
-GPT_DEPLOYMENT_NAME="gpt-4o-2024-11-20"
+GPT_DEPLOYMENT_NAME="gpt-4o"
 GPT_CAPACITY=30
-BING_CONNECTION_NAME="bing-grounding"
 SKIP_FOUNDRY=false
 TEST_ENDPOINT=""
 PROD_ENDPOINT=""
@@ -95,7 +94,7 @@ echo "============================================"
 echo ""
 
 # ---------- Step 1: Resource Group ----------
-echo "[1/7] Creating resource group..."
+echo "[1/8] Creating resource group..."
 az group create \
   --name "$RESOURCE_GROUP" \
   --location "$LOCATION" \
@@ -103,10 +102,10 @@ az group create \
 
 # ---------- Step 2 & 3: Deploy Foundry projects (or skip) ----------
 if [[ "$SKIP_FOUNDRY" == true ]]; then
-  echo "[2/7] Skipping TEST Foundry project (using provided endpoint)"
-  echo "[3/7] Skipping PROD Foundry project (using provided endpoint)"
+  echo "[2/8] Skipping TEST Foundry project (using provided endpoint)"
+  echo "[3/8] Skipping PROD Foundry project (using provided endpoint)"
 else
-  echo "[2/7] Deploying TEST Foundry project..."
+  echo "[2/8] Deploying TEST Foundry project..."
   TEST_OUTPUT=$(az deployment group create \
     --resource-group "$RESOURCE_GROUP" \
     --template-file infra/main.bicep \
@@ -122,7 +121,7 @@ else
   TEST_ENDPOINT=$(echo "$TEST_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['properties']['outputs']['projectEndpoint']['value'])")
   echo "  TEST endpoint: $TEST_ENDPOINT"
 
-  echo "[3/7] Deploying PROD Foundry project..."
+  echo "[3/8] Deploying PROD Foundry project..."
   PROD_OUTPUT=$(az deployment group create \
     --resource-group "$RESOURCE_GROUP" \
     --template-file infra/main.bicep \
@@ -140,7 +139,56 @@ else
 fi
 
 # ---------- Step 4: App Registration + Service Principal ----------
-echo "[4/7] Creating App Registration and Service Principal..."
+echo "[4/8] Validating model availability..."
+echo "  Checking if '$GPT_MODEL_NAME' (version: $GPT_MODEL_VERSION) is available in $LOCATION..."
+
+AVAILABLE_MODELS=$(az cognitiveservices model list \
+  --location "$LOCATION" \
+  --query "[?model.name=='$GPT_MODEL_NAME' && model.version=='$GPT_MODEL_VERSION'].model.name" \
+  -o tsv 2>/dev/null || echo "")
+
+if [[ -z "$AVAILABLE_MODELS" ]]; then
+  echo ""
+  echo "  WARNING: Model '$GPT_MODEL_NAME' version '$GPT_MODEL_VERSION' not found in $LOCATION."
+  echo "  Available GPT models in $LOCATION:"
+  az cognitiveservices model list \
+    --location "$LOCATION" \
+    --query "[?model.name.starts_with(@,'gpt')].{name:model.name, version:model.version}" \
+    -o table 2>/dev/null || echo "  (Could not list models — check permissions)"
+  echo ""
+  echo "  The model upgrade lifecycle demo (Phase 3) requires a second model."
+  echo "  You can continue, but ensure GPT_DEPLOYMENT points to a valid model."
+  echo ""
+  read -rp "  Continue anyway? [y/N] " confirm
+  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "Aborted."
+    exit 1
+  fi
+else
+  echo "  ✓ Model '$GPT_MODEL_NAME' version '$GPT_MODEL_VERSION' is available in $LOCATION"
+fi
+
+# Check for upgrade target model (gpt-4.1) availability for Phase 3 demo
+UPGRADE_MODEL="gpt-4.1"
+UPGRADE_AVAILABLE=$(az cognitiveservices model list \
+  --location "$LOCATION" \
+  --query "[?model.name=='$UPGRADE_MODEL'].model.name | [0]" \
+  -o tsv 2>/dev/null || echo "")
+
+if [[ -n "$UPGRADE_AVAILABLE" ]]; then
+  echo "  ✓ Upgrade target '$UPGRADE_MODEL' is also available (Phase 3 model upgrade demo ready)"
+else
+  echo "  ⚠ Upgrade target '$UPGRADE_MODEL' not found in $LOCATION."
+  echo "    Phase 3 model upgrade demo may need a different target model."
+  echo "    Available models:"
+  az cognitiveservices model list \
+    --location "$LOCATION" \
+    --query "[?model.name.starts_with(@,'gpt')].{name:model.name, version:model.version}" \
+    -o table 2>/dev/null || true
+fi
+
+# ---------- Step 5: App Registration + Service Principal ----------
+echo "[5/8] Creating App Registration and Service Principal..."
 APP_ID=$(az ad app create \
   --display-name "$APP_DISPLAY_NAME" \
   --query appId -o tsv)
@@ -149,8 +197,8 @@ SP_OBJ_ID=$(az ad sp create --id "$APP_ID" --query id -o tsv)
 echo "  Client ID:     $APP_ID"
 echo "  SP Object ID:  $SP_OBJ_ID"
 
-# ---------- Step 5: Federated Credentials ----------
-echo "[5/7] Adding federated credentials..."
+# ---------- Step 6: Federated Credentials ----------
+echo "[6/8] Adding federated credentials..."
 
 az ad app federated-credential create \
   --id "$APP_ID" \
@@ -182,8 +230,8 @@ az ad app federated-credential create \
   }" --output none
 echo "  + release tag credential"
 
-# ---------- Step 6: RBAC Role Assignments ----------
-echo "[6/7] Assigning RBAC roles..."
+# ---------- Step 7: RBAC Role Assignments ----------
+echo "[7/8] Assigning RBAC roles..."
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
 
@@ -219,8 +267,8 @@ if [[ -n "$TEST_ENDPOINT" ]]; then
   fi
 fi
 
-# ---------- Step 7: GitHub Variables ----------
-echo "[7/7] Setting GitHub repository variables..."
+# ---------- Step 8: GitHub Variables ----------
+echo "[8/8] Setting GitHub repository variables..."
 TENANT_ID=$(az account show --query tenantId -o tsv)
 
 gh variable set AZURE_CLIENT_ID       --body "$APP_ID"             --repo "$GITHUB_REPO"
@@ -229,8 +277,7 @@ gh variable set AZURE_SUBSCRIPTION_ID --body "$SUBSCRIPTION_ID"    --repo "$GITH
 gh variable set FOUNDRY_TEST_ENDPOINT --body "$TEST_ENDPOINT"      --repo "$GITHUB_REPO"
 gh variable set FOUNDRY_PROD_ENDPOINT --body "$PROD_ENDPOINT"      --repo "$GITHUB_REPO"
 gh variable set GPT_DEPLOYMENT        --body "$GPT_DEPLOYMENT_NAME" --repo "$GITHUB_REPO"
-gh variable set BING_CONNECTION_NAME  --body "$BING_CONNECTION_NAME" --repo "$GITHUB_REPO"
-echo "  Set 7 variables on $GITHUB_REPO"
+echo "  Set 6 variables on $GITHUB_REPO"
 
 # ---------- Summary ----------
 echo ""
@@ -252,13 +299,11 @@ echo "   Tenant ID:          $TENANT_ID"
 echo "   Subscription ID:    $SUBSCRIPTION_ID"
 echo ""
 echo " GitHub ($GITHUB_REPO):"
-echo "   7 repository variables set"
+echo "   6 repository variables set"
 echo "   3 federated credentials configured"
 echo ""
 echo " Next steps:"
-echo "   1. Configure Bing Grounding connection in both Foundry projects"
-echo "      (Portal: ai.azure.com -> project -> Connections -> + New)"
-echo "   2. Run lifecycle scripts in order:"
+echo "   1. Run lifecycle scripts in order:"
 echo "      ./scripts/lifecycle/01-phase1-web-search.sh"
 echo "      ./scripts/lifecycle/02-phase2-code-interpreter.sh"
 echo "      ./scripts/lifecycle/03-model-upgrade.sh"
@@ -300,9 +345,6 @@ FOUNDRY_PROD_ENDPOINT=$PROD_ENDPOINT
 
 # Model deployment
 GPT_DEPLOYMENT=$GPT_DEPLOYMENT_NAME
-
-# Bing Grounding connection name
-BING_CONNECTION_NAME=$BING_CONNECTION_NAME
 
 # Resource metadata
 RESOURCE_GROUP=$RESOURCE_GROUP
