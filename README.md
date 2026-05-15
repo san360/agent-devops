@@ -5,7 +5,7 @@ versioned prompts, tool changes, model upgrades, evaluation gates, and rollback.
 
 ## Agent: Technology Trend Research & Analysis
 
-- **Phase 1:** Web search only (Bing Grounding)
+- **Phase 1:** Web search only (`web_search` tool)
 - **Phase 2:** Web search + Code Interpreter for data analysis
 
 ## Repository Structure
@@ -60,9 +60,7 @@ This creates:
 - An App Registration with a Service Principal
 - 3 federated credentials for GitHub OIDC (main branch, pull requests, tags)
 - RBAC role assignments (Azure AI User, Cognitive Services OpenAI User)
-- 7 GitHub repository variables (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `FOUNDRY_TEST_ENDPOINT`, `FOUNDRY_PROD_ENDPOINT`, `GPT_DEPLOYMENT`, `BING_CONNECTION_NAME`)
-
-After bootstrap completes, manually configure the Bing Grounding connection in both Foundry projects via the [Azure AI Foundry portal](https://ai.azure.com) (Project > Connections > + New).
+- 6 GitHub repository variables (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `FOUNDRY_TEST_ENDPOINT`, `FOUNDRY_PROD_ENDPOINT`, `GPT_DEPLOYMENT`)
 
 State is saved to `.bootstrap-state.json` for use by the teardown script.
 
@@ -88,7 +86,7 @@ Three scripts simulate the full agent lifecycle by creating PRs that trigger the
 ```
 
 - Creates branch `feature/phase1-web-search`
-- Configures the agent with Bing Grounding (web search) only
+- Configures the agent with the `web_search` tool
 - Evaluation runs 5 Phase 1 test cases
 - Opens a PR — `evaluate.yml` triggers, deploys to TEST, runs eval
 
@@ -101,7 +99,7 @@ Three scripts simulate the full agent lifecycle by creating PRs that trigger the
 ```
 
 - Creates branch `feature/phase2-code-interpreter` from updated `main`
-- Adds `code_interpreter` tool alongside `bing_grounding`
+- Adds `code_interpreter` tool alongside `web_search`
 - Extends the system prompt with a `## Data Analysis` section
 - Evaluation now runs all 8 test cases (Phase 1 + Phase 2) — checks for regressions
 - Opens a PR
@@ -163,7 +161,7 @@ az login
 
 # 4. Deploy to test
 source .env  # or export vars manually
-python scripts/deploy_agent.py --env test --semver 1.0.0 --tools bing_grounding
+python scripts/deploy_agent.py --env test --semver 1.0.0 --tools web_search
 ```
 
 ## CI/CD Workflows
@@ -194,7 +192,7 @@ Re-deploys the exact prompt, tools, and model from a saved artifact.
 ## Model Comparison
 
 ```bash
-python scripts/compare_models.py --current gpt-4o-2024-11-20 --candidate gpt-4.1 --tools bing_grounding
+python scripts/compare_models.py --current gpt-4o-2024-11-20 --candidate gpt-4.1 --tools web_search
 ```
 
 Deploys both model versions to test for side-by-side evaluation.
