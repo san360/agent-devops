@@ -84,8 +84,7 @@ jobs:
 
           # Get agent metadata for display
           agent = project.agents.get(agent_name="tech-trends-agent")
-          versions = list(agent.versions) if agent.versions else []
-          latest_version = versions[-1] if versions else "unknown"
+          latest_version = agent.versions.latest.version if agent.versions and agent.versions.latest else "unknown"
           print(f"Agent: {agent.name} (version: {latest_version})")
 
           # Get the OpenAI client for Responses API
