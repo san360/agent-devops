@@ -70,36 +70,52 @@ jobs:
         id: smoke
         env:
           FOUNDRY_TEST_ENDPOINT: ${{ vars.FOUNDRY_TEST_ENDPOINT }}
-          GPT_DEPLOYMENT:        ${{ vars.GPT_DEPLOYMENT }}
         run: |
           python3 << 'EOF'
           import os
           from azure.ai.projects import AIProjectClient
           from azure.identity import DefaultAzureCredential
 
-          client = AIProjectClient(
+          # Create the project client
+          project = AIProjectClient(
               endpoint=os.environ["FOUNDRY_TEST_ENDPOINT"],
               credential=DefaultAzureCredential()
           )
 
-          agent = client.agents.get(agent_name="tech-trends-agent")
-          print(f"Agent: {agent.name}")
+          # Get agent metadata for display
+          agent = project.agents.get(agent_name="tech-trends-agent")
+          print(f"Agent: {agent.name} (version: {agent.version})")
 
-          openai_client = client.get_openai_client()
+          # Get the OpenAI client for Responses API
+          openai = project.get_openai_client()
 
-          response = openai_client.responses.create(
-              model=os.environ["GPT_DEPLOYMENT"],
+          # Invoke the agent using the Responses API with agent_reference
+          response = openai.responses.create(
               input="What are the latest trends in AI?",
-              extra_body={"agent_reference": {"name": agent.name, "type": "agent_reference"}},
+              extra_body={
+                  "agent_reference": {
+                      "name": "tech-trends-agent",
+                      "type": "agent_reference",
+                  }
+              },
           )
 
           output = response.output_text
+          print(f"Response ID: {response.id}")
+
           if len(output) < 50:
               print(f"FAIL: Response too short ({len(output)} chars)")
               raise SystemExit(1)
 
           print(f"PASS: Agent responded ({len(output)} chars)")
-          print(f"Preview: {output[:200]}...")
+          print(f"Preview: {output[:300]}...")
+
+          # Write smoke test result for downstream steps
+          gh_output = os.environ.get("GITHUB_OUTPUT", "")
+          if gh_output:
+              with open(gh_output, "a") as f:
+                  f.write(f"response_length={len(output)}\n")
+                  f.write(f"response_preview={output[:200]}\n")
           EOF
 
       - name: Run Foundry evaluation
@@ -117,18 +133,222 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            let body = '## Agent Evaluation Results\n\n';
-            body += `**Agent:** tech-trends-agent:${{ steps.deploy.outputs.agent_version }}\n`;
-            body += `**Phase:** ${{ steps.deploy.outputs.phase }}\n`;
-            body += `**Model:** ${{ vars.GPT_DEPLOYMENT }}\n`;
-            body += `**Commit:** ${context.sha.slice(0,7)}\n\n`;
-            const smokeStatus = '${{ steps.smoke.outcome }}' === 'success' ? '✅' : '❌';
-            body += `**Smoke Test:** ${smokeStatus}\n\n`;
-            body += 'Full results are in the [Actions summary](' +
-              `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            const marker = '<!-- agent-eval-bot -->';
+            const smokeOutcome = '${{ steps.smoke.outcome }}';
+            const evalOutcome = '${{ steps.eval.outcome }}';
+            const deployOutcome = '${{ steps.deploy.outcome }}';
+            const agentVersion = '${{ steps.deploy.outputs.agent_version }}' || 'N/A';
+            const phase = '${{ steps.deploy.outputs.phase }}' || 'N/A';
+            const model = '${{ vars.GPT_DEPLOYMENT }}' || 'N/A';
+            const semver = '${{ steps.version.outputs.semver }}';
+            const sha = context.sha.slice(0, 7);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+
+            const icon = (outcome) => outcome === 'success' ? '✅' : outcome === 'failure' ? '❌' : '⚠️';
+            const badge = (outcome) => outcome === 'success'
+              ? '<span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">PASSED</span>'
+              : outcome === 'failure'
+              ? '<span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">FAILED</span>'
+              : '<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">SKIPPED</span>';
+
+            const overallStatus = (smokeOutcome === 'success' && evalOutcome === 'success') ? 'PASSED' : 'FAILED';
+            const overallIcon = overallStatus === 'PASSED' ? '✅' : '❌';
+            const overallColor = overallStatus === 'PASSED' ? '#22c55e' : '#ef4444';
+
+            let body = `${marker}\n`;
+            body += `## ${overallIcon} Agent Deployment & Evaluation Report\n\n`;
+
+            // Agent Details Table
+            body += `### 🤖 Agent Details\n\n`;
+            body += `| Property | Value |\n`;
+            body += `|----------|-------|\n`;
+            body += `| **Agent** | \`tech-trends-agent\` |\n`;
+            body += `| **Version** | \`${agentVersion}\` |\n`;
+            body += `| **Semver** | \`${semver}\` |\n`;
+            body += `| **Phase** | ${phase} |\n`;
+            body += `| **Model** | \`${model}\` |\n`;
+            body += `| **Commit** | \`${sha}\` |\n`;
+            body += `| **Timestamp** | ${timestamp} |\n\n`;
+
+            // Pipeline Results
+            body += `### 📊 Pipeline Results\n\n`;
+            body += `| Step | Status | Details |\n`;
+            body += `|------|--------|----------|\n`;
+            body += `| Deploy to TEST | ${icon(deployOutcome)} ${badge(deployOutcome)} | Agent version \`${agentVersion}\` deployed |\n`;
+            body += `| Smoke Test | ${icon(smokeOutcome)} ${badge(smokeOutcome)} | Invoked agent via Responses API |\n`;
+            body += `| Foundry Evaluation | ${icon(evalOutcome)} ${badge(evalOutcome)} | Evaluated with golden dataset |\n\n`;
+
+            // Tools Configuration
+            body += `### 🛠️ Tools Configuration\n\n`;
+            body += `| Tool | Enabled |\n`;
+            body += `|------|----------|\n`;
+            const toolsInPhase = phase === '2' ? ['code_interpreter'] : phase === '1' ? ['web_search'] : ['web_search', 'code_interpreter'];
+            const allTools = ['web_search', 'code_interpreter'];
+            for (const tool of allTools) {
+              const enabled = toolsInPhase.includes(tool) ? '✅' : '—';
+              body += `| \`${tool}\` | ${enabled} |\n`;
+            }
+            body += '\n';
+
+            // Links
+            body += `### 🔗 Links\n\n`;
+            body += `- [📋 Full Actions Run](${runUrl})\n`;
+            body += `- [📁 Artifacts](${runUrl}#artifacts)\n\n`;
+
+            // Footer
+            body += `---\n`;
+            body += `<sub>🤖 Updated automatically by the CI pipeline · ${timestamp}</sub>\n`;
+
+            // Find existing comment with marker and update, or create new
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body
+              issue_number: context.issue.number,
             });
+
+            const existingComment = comments.find(c => c.body.includes(marker));
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body,
+              });
+              console.log(`Updated existing comment #${existingComment.id}`);
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+              console.log('Created new evaluation comment');
+            }
+
+      - name: Generate HTML report artifact
+        if: always()
+        run: |
+          python3 << 'EOF'
+          import os, json
+          from datetime import datetime, timezone
+
+          agent_version = os.environ.get("AGENT_VERSION", "N/A")
+          phase = os.environ.get("PHASE", "N/A")
+          model = os.environ.get("MODEL", "N/A")
+          semver = os.environ.get("SEMVER", "N/A")
+          sha = os.environ.get("SHA", "N/A")[:7]
+          smoke_outcome = os.environ.get("SMOKE_OUTCOME", "unknown")
+          eval_outcome = os.environ.get("EVAL_OUTCOME", "unknown")
+          deploy_outcome = os.environ.get("DEPLOY_OUTCOME", "unknown")
+          run_url = os.environ.get("RUN_URL", "#")
+          timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+          def status_badge(outcome):
+              colors = {"success": ("#22c55e", "PASSED"), "failure": ("#ef4444", "FAILED")}
+              color, label = colors.get(outcome, ("#f59e0b", "SKIPPED"))
+              return f'<span class="badge" style="background:{color}">{label}</span>'
+
+          def status_icon(outcome):
+              return {"success": "✅", "failure": "❌"}.get(outcome, "⚠️")
+
+          overall = "PASSED" if smoke_outcome == "success" and eval_outcome == "success" else "FAILED"
+          overall_color = "#22c55e" if overall == "PASSED" else "#ef4444"
+
+          html = f"""<!DOCTYPE html>
+          <html lang="en">
+          <head>
+          <meta charset="UTF-8">
+          <title>Agent Evaluation Report — tech-trends-agent v{semver}</title>
+          <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #1e293b; padding: 2rem; }}
+            .container {{ max-width: 800px; margin: 0 auto; }}
+            .header {{ background: linear-gradient(135deg, #1e40af, #7c3aed); color: white; padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem; }}
+            .header h1 {{ font-size: 1.5rem; margin-bottom: 0.5rem; }}
+            .header .overall {{ font-size: 2rem; font-weight: bold; margin-top: 0.5rem; }}
+            .card {{ background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+            .card h2 {{ font-size: 1.1rem; margin-bottom: 1rem; color: #475569; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th, td {{ text-align: left; padding: 0.75rem; border-bottom: 1px solid #e2e8f0; }}
+            th {{ color: #64748b; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }}
+            .badge {{ color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }}
+            code {{ background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9rem; }}
+            .footer {{ text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top: 2rem; }}
+            .status-row td:first-child {{ font-weight: 500; }}
+          </style>
+          </head>
+          <body>
+          <div class="container">
+            <div class="header">
+              <h1>🤖 Agent Evaluation Report</h1>
+              <div>tech-trends-agent <code style="background:rgba(255,255,255,0.2);color:white">v{semver}</code></div>
+              <div class="overall" style="color:{overall_color}">{overall}</div>
+            </div>
+
+            <div class="card">
+              <h2>Agent Details</h2>
+              <table>
+                <tr><td><strong>Agent Name</strong></td><td><code>tech-trends-agent</code></td></tr>
+                <tr><td><strong>Foundry Version</strong></td><td><code>{agent_version}</code></td></tr>
+                <tr><td><strong>Semver</strong></td><td><code>{semver}</code></td></tr>
+                <tr><td><strong>Phase</strong></td><td>{phase}</td></tr>
+                <tr><td><strong>Model</strong></td><td><code>{model}</code></td></tr>
+                <tr><td><strong>Commit</strong></td><td><code>{sha}</code></td></tr>
+                <tr><td><strong>Timestamp</strong></td><td>{timestamp}</td></tr>
+              </table>
+            </div>
+
+            <div class="card">
+              <h2>Pipeline Results</h2>
+              <table>
+                <thead><tr><th>Step</th><th>Status</th><th>Details</th></tr></thead>
+                <tbody class="status-row">
+                  <tr><td>Deploy to TEST</td><td>{status_icon(deploy_outcome)} {status_badge(deploy_outcome)}</td><td>Version <code>{agent_version}</code></td></tr>
+                  <tr><td>Smoke Test</td><td>{status_icon(smoke_outcome)} {status_badge(smoke_outcome)}</td><td>Responses API invocation</td></tr>
+                  <tr><td>Foundry Evaluation</td><td>{status_icon(eval_outcome)} {status_badge(eval_outcome)}</td><td>Golden dataset evaluation</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card">
+              <h2>Tools Configuration</h2>
+              <table>
+                <thead><tr><th>Tool</th><th>Enabled</th></tr></thead>
+                <tbody>
+                  <tr><td><code>web_search</code></td><td>{"✅" if phase in ("1", "3") else "—"}</td></tr>
+                  <tr><td><code>code_interpreter</code></td><td>{"✅" if phase in ("2", "3") else "—"}</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="footer">
+              <p>Generated by CI pipeline · {timestamp} · <a href="{run_url}">View full run</a></p>
+            </div>
+          </div>
+          </body>
+          </html>"""
+
+          os.makedirs("reports", exist_ok=True)
+          with open("reports/evaluation-report.html", "w") as f:
+              f.write(html)
+          print("Generated reports/evaluation-report.html")
+          EOF
+        env:
+          AGENT_VERSION: ${{ steps.deploy.outputs.agent_version }}
+          PHASE: ${{ steps.deploy.outputs.phase }}
+          MODEL: ${{ vars.GPT_DEPLOYMENT }}
+          SEMVER: ${{ steps.version.outputs.semver }}
+          SHA: ${{ github.sha }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          EVAL_OUTCOME: ${{ steps.eval.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Upload HTML report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-report
+          path: reports/evaluation-report.html
