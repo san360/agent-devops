@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 01-phase1-web-search.sh — Phase 1: Initial agent with Bing Grounding only
+# 01-phase1-web-search.sh — Phase 1: Initial agent with Web Search only
 #
 # Creates a PR that sets the agent to Phase 1 configuration.
 # The evaluate.yml workflow will trigger, deploy to TEST, and run evals.
@@ -33,7 +33,7 @@ cat > agents/tech-trends-agent.json << 'AGENT_EOF'
     "model": "${GPT_DEPLOYMENT}",
     "instructions_file": "prompts/tech-trends-agent.md",
     "tools": [
-      { "type": "bing_grounding" }
+      { "type": "web_search" }
     ]
   },
   "eval": {
@@ -102,7 +102,7 @@ EVAL_EOF
 
 # --- Commit, push, open PR ---
 git add agents/ prompts/ evals/
-git commit -m "feat: Phase 1 — tech trends agent with web search (Bing Grounding)"
+git commit -m "feat: Phase 1 — tech trends agent with web search"
 
 git push origin "$BRANCH"
 
@@ -111,7 +111,7 @@ PR_URL=$(gh pr create \
   --title "Phase 1: Tech Trends Agent with Web Search" \
   --body "$(cat <<'PR_EOF'
 ## Summary
-- Initial agent deployment with Bing Grounding (web search) capability
+- Initial agent deployment with Web Search capability (no connection required)
 - System prompt defines structured research analyst behaviour
 - Evaluation runs Phase 1 queries only (5 test cases)
 

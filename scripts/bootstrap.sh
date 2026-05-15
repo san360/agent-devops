@@ -4,8 +4,8 @@
 #
 # Provisions:
 #   1. Resource group
-#   2. TEST Foundry project (Bicep)
-#   3. PROD Foundry project (Bicep)
+#   2. TEST Foundry project (Bicep) — skipped with --skip-foundry
+#   3. PROD Foundry project (Bicep) — skipped with --skip-foundry
 #   4. App Registration + Service Principal
 #   5. 3 Federated credentials (main, PR, tags)
 #   6. RBAC role assignments
@@ -16,15 +16,23 @@
 # Usage:
 #   ./scripts/bootstrap.sh \
 #     --resource-group rg-agent-devops \
-#     --location eastus \
+#     --location swedencentral \
 #     --account-name agentdevops \
 #     --github-repo san360/agent-devops
+#
+#   # Skip Foundry project creation (use existing projects):
+#   ./scripts/bootstrap.sh \
+#     --resource-group rg-agent-devops \
+#     --account-name agentdevops \
+#     --skip-foundry \
+#     --test-endpoint "https://..." \
+#     --prod-endpoint "https://..."
 
 set -euo pipefail
 
 # ---------- defaults ----------
 RESOURCE_GROUP=""
-LOCATION="eastus"
+LOCATION="swedencentral"
 ACCOUNT_NAME=""
 GITHUB_REPO="san360/agent-devops"
 GPT_MODEL_NAME="gpt-4o"
@@ -32,22 +40,34 @@ GPT_MODEL_VERSION="2024-11-20"
 GPT_DEPLOYMENT_NAME="gpt-4o-2024-11-20"
 GPT_CAPACITY=30
 BING_CONNECTION_NAME="bing-grounding"
+SKIP_FOUNDRY=false
+TEST_ENDPOINT=""
+PROD_ENDPOINT=""
 
 # ---------- parse args ----------
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --resource-group)  RESOURCE_GROUP="$2";  shift 2 ;;
-    --location)        LOCATION="$2";        shift 2 ;;
-    --account-name)    ACCOUNT_NAME="$2";    shift 2 ;;
-    --github-repo)     GITHUB_REPO="$2";     shift 2 ;;
+    --resource-group)  RESOURCE_GROUP="$2";      shift 2 ;;
+    --location)        LOCATION="$2";            shift 2 ;;
+    --account-name)    ACCOUNT_NAME="$2";        shift 2 ;;
+    --github-repo)     GITHUB_REPO="$2";         shift 2 ;;
     --gpt-deployment)  GPT_DEPLOYMENT_NAME="$2"; shift 2 ;;
-    --gpt-capacity)    GPT_CAPACITY="$2";    shift 2 ;;
+    --gpt-capacity)    GPT_CAPACITY="$2";        shift 2 ;;
+    --skip-foundry)    SKIP_FOUNDRY=true;        shift   ;;
+    --test-endpoint)   TEST_ENDPOINT="$2";       shift 2 ;;
+    --prod-endpoint)   PROD_ENDPOINT="$2";       shift 2 ;;
     *)                 echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
 
 if [[ -z "$RESOURCE_GROUP" || -z "$ACCOUNT_NAME" ]]; then
   echo "Usage: $0 --resource-group <rg> --account-name <name> [--location <loc>] [--github-repo <owner/repo>]"
+  echo "       Add --skip-foundry --test-endpoint <url> --prod-endpoint <url> to use existing projects"
+  exit 1
+fi
+
+if [[ "$SKIP_FOUNDRY" == true && ( -z "$TEST_ENDPOINT" || -z "$PROD_ENDPOINT" ) ]]; then
+  echo "ERROR: --skip-foundry requires both --test-endpoint and --prod-endpoint"
   exit 1
 fi
 
@@ -61,8 +81,14 @@ echo "============================================"
 echo " Resource Group:  $RESOURCE_GROUP"
 echo " Location:        $LOCATION"
 echo " Account Name:    $ACCOUNT_NAME"
-echo " Test Project:    $TEST_PROJECT"
-echo " Prod Project:    $PROD_PROJECT"
+echo " Skip Foundry:    $SKIP_FOUNDRY"
+if [[ "$SKIP_FOUNDRY" == true ]]; then
+  echo " TEST endpoint:   $TEST_ENDPOINT (provided)"
+  echo " PROD endpoint:   $PROD_ENDPOINT (provided)"
+else
+  echo " Test Project:    $TEST_PROJECT"
+  echo " Prod Project:    $PROD_PROJECT"
+fi
 echo " GitHub Repo:     $GITHUB_REPO"
 echo " GPT Deployment:  $GPT_DEPLOYMENT_NAME"
 echo "============================================"
@@ -75,39 +101,43 @@ az group create \
   --location "$LOCATION" \
   --output none
 
-# ---------- Step 2: Deploy TEST project ----------
-echo "[2/7] Deploying TEST Foundry project..."
-TEST_OUTPUT=$(az deployment group create \
-  --resource-group "$RESOURCE_GROUP" \
-  --template-file infra/main.bicep \
-  --parameters \
-    accountName="${ACCOUNT_NAME}test" \
-    projectName="$TEST_PROJECT" \
-    gptDeploymentName="$GPT_DEPLOYMENT_NAME" \
-    gptModelName="$GPT_MODEL_NAME" \
-    gptModelVersion="$GPT_MODEL_VERSION" \
-    gptCapacity="$GPT_CAPACITY" \
-  --output json)
+# ---------- Step 2 & 3: Deploy Foundry projects (or skip) ----------
+if [[ "$SKIP_FOUNDRY" == true ]]; then
+  echo "[2/7] Skipping TEST Foundry project (using provided endpoint)"
+  echo "[3/7] Skipping PROD Foundry project (using provided endpoint)"
+else
+  echo "[2/7] Deploying TEST Foundry project..."
+  TEST_OUTPUT=$(az deployment group create \
+    --resource-group "$RESOURCE_GROUP" \
+    --template-file infra/main.bicep \
+    --parameters \
+      accountName="${ACCOUNT_NAME}test" \
+      projectName="$TEST_PROJECT" \
+      gptDeploymentName="$GPT_DEPLOYMENT_NAME" \
+      gptModelName="$GPT_MODEL_NAME" \
+      gptModelVersion="$GPT_MODEL_VERSION" \
+      gptCapacity="$GPT_CAPACITY" \
+    --output json)
 
-TEST_ENDPOINT=$(echo "$TEST_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['properties']['outputs']['projectEndpoint']['value'])")
-echo "  TEST endpoint: $TEST_ENDPOINT"
+  TEST_ENDPOINT=$(echo "$TEST_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['properties']['outputs']['projectEndpoint']['value'])")
+  echo "  TEST endpoint: $TEST_ENDPOINT"
 
-# ---------- Step 3: Deploy PROD project ----------
-echo "[3/7] Deploying PROD Foundry project..."
-PROD_OUTPUT=$(az deployment group create \
-  --resource-group "$RESOURCE_GROUP" \
-  --template-file infra/main.bicep \
-  --parameters \
-    accountName="${ACCOUNT_NAME}prod" \
-    projectName="$PROD_PROJECT" \
-    gptDeploymentName="$GPT_DEPLOYMENT_NAME" \
-    gptModelName="$GPT_MODEL_NAME" \
-    gptModelVersion="$GPT_MODEL_VERSION" \
-    gptCapacity="$GPT_CAPACITY" \
-  --output json)
+  echo "[3/7] Deploying PROD Foundry project..."
+  PROD_OUTPUT=$(az deployment group create \
+    --resource-group "$RESOURCE_GROUP" \
+    --template-file infra/main.bicep \
+    --parameters \
+      accountName="${ACCOUNT_NAME}prod" \
+      projectName="$PROD_PROJECT" \
+      gptDeploymentName="$GPT_DEPLOYMENT_NAME" \
+      gptModelName="$GPT_MODEL_NAME" \
+      gptModelVersion="$GPT_MODEL_VERSION" \
+      gptCapacity="$GPT_CAPACITY" \
+    --output json)
 
-PROD_ENDPOINT=$(echo "$PROD_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['properties']['outputs']['projectEndpoint']['value'])")
-echo "  PROD endpoint: $PROD_ENDPOINT"
+  PROD_ENDPOINT=$(echo "$PROD_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['properties']['outputs']['projectEndpoint']['value'])")
+  echo "  PROD endpoint: $PROD_ENDPOINT"
+fi
 
 # ---------- Step 4: App Registration + Service Principal ----------
 echo "[4/7] Creating App Registration and Service Principal..."
@@ -159,7 +189,7 @@ SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
 
 az role assignment create \
   --assignee "$SP_OBJ_ID" \
-  --role "Azure AI User" \
+  --role "53ca6127-db72-4b80-b1b0-d745d6d5456d" \
   --scope "$SCOPE" \
   --output none
 echo "  + Azure AI User"
@@ -235,3 +265,31 @@ json.dump({
 }, open('$STATE_FILE', 'w'), indent=2)
 "
 echo " State saved to $STATE_FILE (used by teardown.sh)"
+
+# Save .env for local development
+ENV_FILE=".env"
+cat > "$ENV_FILE" <<EOF
+# Generated by bootstrap.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)
+# Identity (Service Principal)
+AZURE_CLIENT_ID=$APP_ID
+AZURE_TENANT_ID=$TENANT_ID
+AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID
+SP_OBJECT_ID=$SP_OBJ_ID
+
+# Azure AI Foundry endpoints
+FOUNDRY_TEST_ENDPOINT=$TEST_ENDPOINT
+FOUNDRY_PROD_ENDPOINT=$PROD_ENDPOINT
+
+# Model deployment
+GPT_DEPLOYMENT=$GPT_DEPLOYMENT_NAME
+
+# Bing Grounding connection name
+BING_CONNECTION_NAME=$BING_CONNECTION_NAME
+
+# Resource metadata
+RESOURCE_GROUP=$RESOURCE_GROUP
+LOCATION=$LOCATION
+ACCOUNT_NAME=$ACCOUNT_NAME
+GITHUB_REPO=$GITHUB_REPO
+EOF
+echo " Local .env written (git-ignored)"

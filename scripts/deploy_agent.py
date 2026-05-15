@@ -1,8 +1,8 @@
 """Deploy the tech-trends-agent to an Azure AI Foundry project.
 
 Usage:
-    python scripts/deploy_agent.py --env test --semver 1.0.0 --tools bing_grounding
-    python scripts/deploy_agent.py --env prod --semver 1.2.0 --tools bing_grounding,code_interpreter
+    python scripts/deploy_agent.py --env test --semver 1.0.0 --tools web_search
+    python scripts/deploy_agent.py --env prod --semver 1.2.0 --tools web_search,code_interpreter
 """
 
 import argparse
@@ -14,9 +14,9 @@ from datetime import datetime, timezone
 
 from azure.ai.projects import AIProjectClient
 from azure.ai.projects.models import (
-    BingGroundingTool,
     CodeInterpreterTool,
     PromptAgentDefinition,
+    WebSearchTool,
 )
 from azure.identity import DefaultAzureCredential
 
@@ -37,11 +37,11 @@ def hash_file(path):
     return "sha256:" + hashlib.sha256(open(path, "rb").read()).hexdigest()
 
 
-def build_sdk_tools(tools, conn_name):
+def build_sdk_tools(tools):
     sdk_tools = []
     for t in tools:
-        if t["type"] == "bing_grounding":
-            sdk_tools.append(BingGroundingTool(connection_id=conn_name))
+        if t["type"] == "web_search":
+            sdk_tools.append(WebSearchTool())
         elif t["type"] == "code_interpreter":
             sdk_tools.append(CodeInterpreterTool())
     return sdk_tools
@@ -50,7 +50,6 @@ def build_sdk_tools(tools, conn_name):
 def deploy_agent(env: str, tools: list, semver: str):
     endpoint = os.environ[f"FOUNDRY_{env.upper()}_ENDPOINT"]
     model = os.environ["GPT_DEPLOYMENT"]
-    conn_name = os.environ.get("BING_CONNECTION_NAME", "bing-grounding")
 
     prompt_path = "prompts/tech-trends-agent.md"
     instructions = open(prompt_path).read()
@@ -63,11 +62,12 @@ def deploy_agent(env: str, tools: list, semver: str):
         f"model: {model} | commit: {short_sha} | v{semver}"
     )
 
-    sdk_tools = build_sdk_tools(tools, conn_name)
-
     client = AIProjectClient(
         endpoint=endpoint, credential=DefaultAzureCredential()
     )
+
+    sdk_tools = build_sdk_tools(tools)
+
     agent = client.agents.create_version(
         agent_name="tech-trends-agent",
         description=description,
@@ -120,8 +120,8 @@ if __name__ == "__main__":
     p.add_argument("--semver", default="0.0.1")
     p.add_argument(
         "--tools",
-        default="bing_grounding",
-        help="comma-separated: bing_grounding,code_interpreter",
+        default="web_search",
+        help="comma-separated: web_search,code_interpreter",
     )
     args = p.parse_args()
 
