@@ -60,6 +60,7 @@ This creates:
 - An App Registration with a Service Principal
 - 3 federated credentials for GitHub OIDC (main branch, pull requests, tags)
 - RBAC role assignments (Azure AI User, Cognitive Services OpenAI User)
+- Model availability validation (checks current + upgrade target model)
 - 6 GitHub repository variables (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `FOUNDRY_TEST_ENDPOINT`, `FOUNDRY_PROD_ENDPOINT`, `GPT_DEPLOYMENT`)
 
 State is saved to `.bootstrap-state.json` for use by the teardown script.
@@ -113,9 +114,14 @@ Three scripts simulate the full agent lifecycle by creating PRs that trigger the
 ```
 
 - Creates branch `chore/model-upgrade-gpt41`
+- Upgrades model from `gpt-4o-2024-11-20` (default) to `gpt-4.1`
 - Updates the `GPT_DEPLOYMENT` GitHub variable to `gpt-4.1`
 - Adds a model history entry in the agent config
 - Opens a PR — the eval gate verifies the new model scores at or above thresholds
+
+The bootstrap script validates that both the current model and the upgrade target
+(`gpt-4.1`) are available in your chosen Azure region. If `gpt-4.1` is not available,
+the script will list alternatives you can use instead.
 
 **After the eval passes, merge the PR.** The full lifecycle demo is complete.
 
@@ -180,6 +186,14 @@ The eval gate uses `microsoft/ai-agent-evals@v3-beta` with four evaluators:
 - **Relevance** (threshold: 0.75)
 - **Groundedness** (threshold: 0.75)
 - **Coherence** (threshold: 0.80)
+
+A smoke test step runs before evaluation — it invokes the agent with a test query
+and verifies a valid response is returned.
+
+**Note on evaluation naming:** The `ai-agent-evals` action creates a new evaluation
+group named "Agent Evaluation" on every run (custom names not yet supported). Each run
+is named `Agent tech-trends-agent:<version>`. The PR comment includes the commit SHA
+for traceability.
 
 ## Rollback
 

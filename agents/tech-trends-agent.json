@@ -5,7 +5,6 @@
     "model": "${GPT_DEPLOYMENT}",
     "instructions_file": "prompts/tech-trends-agent.md",
     "tools": [
-      { "type": "bing_grounding" },
       { "type": "code_interpreter" }
     ]
   },

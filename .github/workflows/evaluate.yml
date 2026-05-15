@@ -49,7 +49,6 @@ jobs:
         env:
           FOUNDRY_TEST_ENDPOINT:  ${{ vars.FOUNDRY_TEST_ENDPOINT }}
           GPT_DEPLOYMENT:         ${{ vars.GPT_DEPLOYMENT }}
-          BING_CONNECTION_NAME:   ${{ vars.BING_CONNECTION_NAME }}
         run: |
           TOOLS=$(python3 -c "
           import json
@@ -67,6 +66,47 @@ jobs:
             --tools "$TOOLS"
           echo "phase=$PHASE" >> $GITHUB_OUTPUT
 
+      - name: Smoke test — invoke agent and verify response
+        id: smoke
+        env:
+          FOUNDRY_TEST_ENDPOINT: ${{ vars.FOUNDRY_TEST_ENDPOINT }}
+        run: |
+          python3 << 'EOF'
+          import os
+          from azure.ai.projects import AIProjectClient
+          from azure.identity import DefaultAzureCredential
+
+          client = AIProjectClient(
+              endpoint=os.environ["FOUNDRY_TEST_ENDPOINT"],
+              credential=DefaultAzureCredential()
+          )
+
+          agent = client.agents.get_agent("tech-trends-agent")
+          thread = client.agents.threads.create()
+          client.agents.messages.create(
+              thread_id=thread.id,
+              role="user",
+              content="What are the latest trends in AI?"
+          )
+          run = client.agents.runs.create_and_process(
+              thread_id=thread.id,
+              agent_id=agent.id
+          )
+
+          if run.status != "completed":
+              print(f"FAIL: Agent run status = {run.status}")
+              raise SystemExit(1)
+
+          messages = client.agents.messages.list(thread_id=thread.id)
+          response = messages.data[0].content[0].text.value
+          if len(response) < 50:
+              print(f"FAIL: Response too short ({len(response)} chars)")
+              raise SystemExit(1)
+
+          print(f"PASS: Agent responded ({len(response)} chars)")
+          print(f"Preview: {response[:200]}...")
+          EOF
+
       - name: Run Foundry evaluation
         id: eval
         uses: microsoft/ai-agent-evals@v3-beta
@@ -82,11 +122,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
             let body = '## Agent Evaluation Results\n\n';
+            body += `**Agent:** tech-trends-agent:${{ steps.deploy.outputs.agent_version }}\n`;
             body += `**Phase:** ${{ steps.deploy.outputs.phase }}\n`;
             body += `**Model:** ${{ vars.GPT_DEPLOYMENT }}\n`;
             body += `**Commit:** ${context.sha.slice(0,7)}\n\n`;
+            const smokeStatus = '${{ steps.smoke.outcome }}' === 'success' ? '✅' : '❌';
+            body += `**Smoke Test:** ${smokeStatus}\n\n`;
             body += 'Full results are in the [Actions summary](' +
               `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n`;
             github.rest.issues.createComment({
