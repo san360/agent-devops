@@ -26,7 +26,7 @@ def tmp_project(tmp_path):
             "tools": [{"type": "bing_grounding"}],
         },
         "eval": {
-            "dataset": "evals/golden-dataset.jsonl",
+            "dataset": "evals/golden-dataset.json",
             "phase_filter": "1",
             "config": "evals/eval-config.json",
         },

@@ -1,0 +1,19 @@
+{
+  "name": "tech-trends-agent-eval",
+  "evaluators": [
+    "builtin.task_adherence",
+    "builtin.relevance",
+    "builtin.groundedness",
+    "builtin.coherence"
+  ],
+  "data": [
+    {"query": "What are the top three AI model releases in the last 90 days and their key capabilities?", "ground_truth": "Response should identify at least 3 recent model releases with specific capability descriptions, cite web sources, and be structured with a summary and key findings section.", "phase": "1", "category": "trend_research"},
+    {"query": "How is the major cloud provider landscape shifting in 2025 regarding AI infrastructure?", "ground_truth": "Response should cover at least 2 major cloud providers, discuss AI infrastructure investment or announcements, and cite current sources.", "phase": "1", "category": "trend_research"},
+    {"query": "What is the current state of open-source LLM adoption in enterprise settings?", "ground_truth": "Response should address enterprise adoption, mention specific models or frameworks, and provide balanced perspective on open vs closed source.", "phase": "1", "category": "market_analysis"},
+    {"query": "Summarise recent developer sentiment around AI coding tools based on community discussions.", "ground_truth": "Response should reflect actual developer perspectives, not vendor claims, and cite community sources such as surveys, forums or publications.", "phase": "1", "category": "community_sentiment"},
+    {"query": "What are analysts predicting for AI chip demand over the next 12 months?", "ground_truth": "Response should include analyst predictions, reference specific companies or market segments, and note the source and date of predictions.", "phase": "1", "category": "market_forecast"},
+    {"query": "Search for the latest GPU benchmark comparison data and calculate which GPU offers the best performance-per-dollar ratio based on the data you find.", "ground_truth": "Response should retrieve actual benchmark data, perform a calculation or comparison, present results in a structured format, and cite the data source.", "phase": "2", "category": "data_analysis"},
+    {"query": "Find recent AI model API pricing tables and produce a comparison showing cost per million tokens for at least 4 models.", "ground_truth": "Response should retrieve current pricing data, present a structured comparison table, and identify the most cost-effective option for different use cases.", "phase": "2", "category": "data_analysis"},
+    {"query": "Retrieve the latest Stack Overflow developer survey data on AI tool usage and compute the percentage increase in adoption compared to the prior year.", "ground_truth": "Response should locate survey data, perform a percentage calculation, present the result clearly, and note the source and survey year.", "phase": "2", "category": "data_analysis"}
+  ]
+}

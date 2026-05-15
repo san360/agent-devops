@@ -5,11 +5,11 @@
     "model": "${GPT_DEPLOYMENT}",
     "instructions_file": "prompts/tech-trends-agent.md",
     "tools": [
-      { "type": "bing_grounding" }
+      { "type": "web_search" }
     ]
   },
   "eval": {
-    "dataset": "evals/golden-dataset.jsonl",
+    "dataset": "evals/golden-dataset.json",
     "phase_filter": "1",
     "config": "evals/eval-config.json"
   },

@@ -23,7 +23,7 @@ param gptModelVersion string = '2024-11-20'
 param gptCapacity int = 30
 
 // --- Cognitive Services account (hosts the Foundry project) ---
-resource aiAccount 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+resource aiAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   name: accountName
   location: location
   kind: 'AIServices'
@@ -33,11 +33,12 @@ resource aiAccount 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   properties: {
     customSubDomainName: accountName
     publicNetworkAccess: 'Enabled'
+    allowProjectManagement: true
   }
 }
 
 // --- AI Project ---
-resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2024-10-01' = {
+resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   parent: aiAccount
   name: projectName
   location: location
@@ -45,7 +46,7 @@ resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2024-10-01' = 
 }
 
 // --- GPT model deployment ---
-resource gptDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource gptDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: aiAccount
   name: gptDeploymentName
   sku: {
