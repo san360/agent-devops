@@ -81,30 +81,23 @@ jobs:
               credential=DefaultAzureCredential()
           )
 
-          agent = client.agents.get_agent("tech-trends-agent")
-          thread = client.agents.threads.create()
-          client.agents.messages.create(
-              thread_id=thread.id,
-              role="user",
-              content="What are the latest trends in AI?"
-          )
-          run = client.agents.runs.create_and_process(
-              thread_id=thread.id,
-              agent_id=agent.id
+          agent = client.agents.get(agent_name="tech-trends-agent")
+          print(f"Agent: {agent.name} (latest version: {agent.latest_version})")
+
+          openai_client = client.get_openai_client()
+
+          response = openai_client.responses.create(
+              input="What are the latest trends in AI?",
+              extra_body={"agent_reference": {"name": agent.name, "type": "agent_reference"}},
           )
 
-          if run.status != "completed":
-              print(f"FAIL: Agent run status = {run.status}")
+          output = response.output_text
+          if len(output) < 50:
+              print(f"FAIL: Response too short ({len(output)} chars)")
               raise SystemExit(1)
 
-          messages = client.agents.messages.list(thread_id=thread.id)
-          response = messages.data[0].content[0].text.value
-          if len(response) < 50:
-              print(f"FAIL: Response too short ({len(response)} chars)")
-              raise SystemExit(1)
-
-          print(f"PASS: Agent responded ({len(response)} chars)")
-          print(f"Preview: {response[:200]}...")
+          print(f"PASS: Agent responded ({len(output)} chars)")
+          print(f"Preview: {output[:200]}...")
           EOF
 
       - name: Run Foundry evaluation
