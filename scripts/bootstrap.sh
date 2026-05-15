@@ -201,33 +201,21 @@ az role assignment create \
   --output none
 echo "  + Cognitive Services OpenAI User (on resource group)"
 
-# Azure AI Developer on Foundry project scope (needed for agents/write data action)
+# Azure AI User (Foundry User) on Foundry account scope — grants agents/write data action
 if [[ -n "$TEST_ENDPOINT" ]]; then
   FOUNDRY_HOST=$(echo "$TEST_ENDPOINT" | sed -E 's|https://([^/]+)/.*|\1|')
   FOUNDRY_ACCOUNT_NAME=$(echo "$FOUNDRY_HOST" | sed -E 's|\.services\.ai\.azure\.com||')
-  TEST_PROJECT_NAME=$(echo "$TEST_ENDPOINT" | sed -E 's|.*/projects/([^/]+).*|\1|')
   FOUNDRY_ACCOUNT_ID=$(az cognitiveservices account list \
     --query "[?name=='${FOUNDRY_ACCOUNT_NAME}'].id | [0]" -o tsv 2>/dev/null)
   if [[ -n "$FOUNDRY_ACCOUNT_ID" ]]; then
     az role assignment create \
       --assignee "$SP_OBJ_ID" \
-      --role "Azure AI Developer" \
-      --scope "$FOUNDRY_ACCOUNT_ID/projects/$TEST_PROJECT_NAME" \
+      --role "53ca6127-db72-4b80-b1b0-d745d6d5456d" \
+      --scope "$FOUNDRY_ACCOUNT_ID" \
       --output none
-    echo "  + Azure AI Developer (on project: $TEST_PROJECT_NAME)"
+    echo "  + Azure AI User / Foundry User (on account: $FOUNDRY_ACCOUNT_NAME)"
   else
-    echo "  ! Could not resolve Foundry account — assign Azure AI Developer on project manually"
-  fi
-fi
-if [[ -n "$PROD_ENDPOINT" && "$PROD_ENDPOINT" != "$TEST_ENDPOINT" ]]; then
-  PROD_PROJECT_NAME=$(echo "$PROD_ENDPOINT" | sed -E 's|.*/projects/([^/]+).*|\1|')
-  if [[ -n "$FOUNDRY_ACCOUNT_ID" ]]; then
-    az role assignment create \
-      --assignee "$SP_OBJ_ID" \
-      --role "Azure AI Developer" \
-      --scope "$FOUNDRY_ACCOUNT_ID/projects/$PROD_PROJECT_NAME" \
-      --output none
-    echo "  + Azure AI Developer (on project: $PROD_PROJECT_NAME)"
+    echo "  ! Could not resolve Foundry account — assign Azure AI User (53ca6127-...) manually"
   fi
 fi
 
