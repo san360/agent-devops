@@ -70,6 +70,7 @@ jobs:
         id: smoke
         env:
           FOUNDRY_TEST_ENDPOINT: ${{ vars.FOUNDRY_TEST_ENDPOINT }}
+          GPT_DEPLOYMENT:        ${{ vars.GPT_DEPLOYMENT }}
         run: |
           python3 << 'EOF'
           import os
@@ -87,6 +88,7 @@ jobs:
           openai_client = client.get_openai_client()
 
           response = openai_client.responses.create(
+              model=os.environ["GPT_DEPLOYMENT"],
               input="What are the latest trends in AI?",
               extra_body={"agent_reference": {"name": agent.name, "type": "agent_reference"}},
           )
