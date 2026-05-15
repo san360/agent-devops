@@ -127,12 +127,55 @@ the script will list alternatives you can use instead.
 
 ### Lifecycle Flow Diagram
 
+```mermaid
+flowchart LR
+    subgraph PR Pipeline
+        A[Developer Push] --> B[Create PR]
+        B --> C[Deploy to TEST]
+        C --> D[Smoke Test]
+        D --> E[Evaluation Run]
+        E --> F{Scores Pass?}
+        F -->|Yes| G[Post Results to PR]
+        F -->|No| H[Block Merge]
+    end
+
+    subgraph Merge Pipeline
+        G --> I[Merge to main]
+        I --> J[Deploy to PROD]
+        J --> K[Commit Artifact]
+    end
 ```
-Phase 1 PR → eval gate → merge → prod deploy
-                                      ↓
-Phase 2 PR → eval gate → merge → prod deploy
-                                      ↓
-Phase 3 PR → eval gate → merge → prod deploy
+
+### Agent Evaluation Flow
+
+```mermaid
+flowchart TD
+    A[Pipeline Triggered] --> B{Evaluation exists?}
+    B -->|No| C[Create Evaluation\ntech-trends-agent-eval]
+    B -->|Yes| D[Reuse Existing Evaluation]
+    C --> E[Create Run]
+    D --> E
+    E --> F[Upload Golden Dataset]
+    F --> G[Invoke Agent with Queries]
+    G --> H[Run Evaluators\ntask_adherence, relevance,\ngroundedness, coherence]
+    H --> I[Wait for Completion]
+    I --> J[Output Scores & Report URL]
+    J --> K[Post Summary to PR]
+
+    style C fill:#4ade80,stroke:#16a34a
+    style D fill:#60a5fa,stroke:#2563eb
+```
+
+### Lifecycle Phases
+
+```mermaid
+flowchart LR
+    P1["Phase 1\nweb_search"] -->|merge| P2["Phase 2\ncode_interpreter"]
+    P2 -->|merge| P3["Phase 3\nModel Upgrade\ngpt-4o → gpt-4.1"]
+
+    P1 -.->|eval gate| P1E[✅ 5 queries]
+    P2 -.->|eval gate| P2E[✅ 8 queries]
+    P3 -.->|eval gate| P3E[✅ 8 queries]
 ```
 
 ## Teardown
@@ -180,7 +223,7 @@ python scripts/deploy_agent.py --env test --semver 1.0.0 --tools web_search
 
 ## Evaluation
 
-The eval gate uses `microsoft/ai-agent-evals@v3-beta` with four evaluators:
+The eval gate uses a **create-once, run-many** pattern with four evaluators:
 
 - **Task Adherence** (threshold: 0.80)
 - **Relevance** (threshold: 0.75)
@@ -190,10 +233,9 @@ The eval gate uses `microsoft/ai-agent-evals@v3-beta` with four evaluators:
 A smoke test step runs before evaluation — it invokes the agent with a test query
 and verifies a valid response is returned.
 
-**Note on evaluation naming:** The `ai-agent-evals` action creates a new evaluation
-group named "Agent Evaluation" on every run (custom names not yet supported). Each run
-is named `Agent tech-trends-agent:<version>`. The PR comment includes the commit SHA
-for traceability.
+**Evaluation naming:** A single evaluation named `tech-trends-agent-eval` is created
+on the first pipeline run. Subsequent runs reuse the same evaluation and add new runs.
+Each run is named `{branch}/{commit-sha}` for full traceability back to the source change.
 
 ## Rollback
 
