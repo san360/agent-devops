@@ -82,7 +82,7 @@ jobs:
           )
 
           agent = client.agents.get(agent_name="tech-trends-agent")
-          print(f"Agent: {agent.name} (latest version: {agent.latest_version})")
+          print(f"Agent: {agent.name}")
 
           openai_client = client.get_openai_client()
 
