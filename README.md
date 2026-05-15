@@ -6,7 +6,7 @@ versioned prompts, tool changes, model upgrades, evaluation gates, and rollback.
 ## Agent: Technology Trend Research & Analysis
 
 - **Phase 1:** Web search only (`web_search` tool)
-- **Phase 2:** Web search + Code Interpreter for data analysis
+- **Phase 2:** Code Interpreter only (`code_interpreter` tool) for data analysis
 
 ## Repository Structure
 
@@ -99,7 +99,7 @@ Three scripts simulate the full agent lifecycle by creating PRs that trigger the
 ```
 
 - Creates branch `feature/phase2-code-interpreter` from updated `main`
-- Adds `code_interpreter` tool alongside `web_search`
+- Replaces `web_search` with `code_interpreter` tool
 - Extends the system prompt with a `## Data Analysis` section
 - Evaluation now runs all 8 test cases (Phase 1 + Phase 2) — checks for regressions
 - Opens a PR
