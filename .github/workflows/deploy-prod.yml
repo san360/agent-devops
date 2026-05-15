@@ -1,0 +1,70 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agents/**"
+      - "prompts/**"
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  deploy:
+    name: Deploy versioned agent to production
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Azure login (OIDC federation)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Derive semver from Git tags
+        id: version
+        run: |
+          SEMVER=$(git describe --tags --abbrev=0 2>/dev/null || echo "1.0.$(git rev-list --count HEAD)")
+          echo "semver=${SEMVER#v}" >> $GITHUB_OUTPUT
+
+      - name: Deploy agent to PRODUCTION
+        env:
+          FOUNDRY_PROD_ENDPOINT: ${{ vars.FOUNDRY_PROD_ENDPOINT }}
+          GPT_DEPLOYMENT:        ${{ vars.GPT_DEPLOYMENT }}
+          BING_CONNECTION_NAME:  ${{ vars.BING_CONNECTION_NAME }}
+        run: |
+          TOOLS=$(python3 -c "
+          import json
+          cfg = json.load(open('agents/tech-trends-agent.json'))
+          print(','.join(t['type'] for t in cfg['definition']['tools']))
+          ")
+          python scripts/deploy_agent.py \
+            --env prod \
+            --semver "${{ steps.version.outputs.semver }}" \
+            --tools "$TOOLS"
+
+      - name: Commit artifact to repository
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add artifacts/
+          git diff --staged --quiet || git commit -m \
+            "chore: add agent artifact v${{ steps.version.outputs.semver }} [skip ci]"
+          git push

@@ -1,0 +1,8 @@
+azure-ai-projects>=1.0.0b1
+azure-ai-evaluation>=1.0.0b1
+azure-identity>=1.15.0
+
+# Dev / Test
+pytest>=8.0
+pytest-mock>=3.12
+pyyaml>=6.0
