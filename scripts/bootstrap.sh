@@ -192,14 +192,32 @@ az role assignment create \
   --role "53ca6127-db72-4b80-b1b0-d745d6d5456d" \
   --scope "$SCOPE" \
   --output none
-echo "  + Azure AI User"
+echo "  + Azure AI User (on resource group)"
 
 az role assignment create \
   --assignee "$SP_OBJ_ID" \
   --role "Cognitive Services OpenAI User" \
   --scope "$SCOPE" \
   --output none
-echo "  + Cognitive Services OpenAI User"
+echo "  + Cognitive Services OpenAI User (on resource group)"
+
+# Azure AI Developer on Foundry account scope (needed for agents/write data action)
+if [[ -n "$TEST_ENDPOINT" ]]; then
+  FOUNDRY_HOST=$(echo "$TEST_ENDPOINT" | sed -E 's|https://([^/]+)/.*|\1|')
+  FOUNDRY_ACCOUNT_NAME=$(echo "$FOUNDRY_HOST" | sed -E 's|\.services\.ai\.azure\.com||')
+  FOUNDRY_ACCOUNT_ID=$(az cognitiveservices account list \
+    --query "[?name=='${FOUNDRY_ACCOUNT_NAME}'].id | [0]" -o tsv 2>/dev/null)
+  if [[ -n "$FOUNDRY_ACCOUNT_ID" ]]; then
+    az role assignment create \
+      --assignee "$SP_OBJ_ID" \
+      --role "Azure AI Developer" \
+      --scope "$FOUNDRY_ACCOUNT_ID" \
+      --output none
+    echo "  + Azure AI Developer (on Foundry account: $FOUNDRY_ACCOUNT_NAME)"
+  else
+    echo "  ! Could not resolve Foundry account ID — assign Azure AI Developer manually"
+  fi
+fi
 
 # ---------- Step 7: GitHub Variables ----------
 echo "[7/7] Setting GitHub repository variables..."
