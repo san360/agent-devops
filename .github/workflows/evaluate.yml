@@ -114,9 +114,10 @@ jobs:
           # Write smoke test result for downstream steps
           gh_output = os.environ.get("GITHUB_OUTPUT", "")
           if gh_output:
+              preview = output[:200].replace('\n', ' ').replace('\r', '')
               with open(gh_output, "a") as f:
                   f.write(f"response_length={len(output)}\n")
-                  f.write(f"response_preview={output[:200]}\n")
+                  f.write(f"response_preview={preview}\n")
           EOF
 
       - name: Run Foundry evaluation
