@@ -11,6 +11,6 @@
     "groundedness": 0.75,
     "coherence": 0.80
   },
-  "phase_filter": null,
-  "notes": "Set phase_filter to '1' or '2' to run only phase-specific cases. null runs all."
+  "phase_filter": "1",
+  "notes": "Phase 1: Only web search queries evaluated. Phase 2 data analysis queries excluded."
 }
