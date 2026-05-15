@@ -40,7 +40,7 @@ cat > agents/tech-trends-agent.json << 'AGENT_EOF'
     ]
   },
   "eval": {
-    "dataset": "evals/golden-dataset.jsonl",
+    "dataset": "evals/golden-dataset.json",
     "phase_filter": null,
     "config": "evals/eval-config.json"
   },

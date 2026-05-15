@@ -29,7 +29,7 @@ jobs:
           azure-ai-project-endpoint: ${{ vars.FOUNDRY_PROD_ENDPOINT }}
           deployment-name:           ${{ vars.GPT_DEPLOYMENT }}
           agent-ids:                 "tech-trends-agent:latest"
-          data-path:                 "./evals/golden-dataset.jsonl"
+          data-path:                 "./evals/golden-dataset.json"
           evaluation-result-view:    "default"
 
       - name: Open GitHub issue if scores degraded
