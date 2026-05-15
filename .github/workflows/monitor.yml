@@ -16,11 +16,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - uses: azure/login@v2
         with:
           client-id:       ${{ vars.AZURE_CLIENT_ID }}
           tenant-id:       ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get latest agent version
+        id: agent
+        env:
+          FOUNDRY_PROD_ENDPOINT: ${{ vars.FOUNDRY_PROD_ENDPOINT }}
+        run: |
+          VERSION=$(python3 -c "
+          import os
+          from azure.ai.projects import AIProjectClient
+          from azure.identity import DefaultAzureCredential
+          client = AIProjectClient(endpoint=os.environ['FOUNDRY_PROD_ENDPOINT'], credential=DefaultAzureCredential())
+          agent = client.agents.get_agent('tech-trends-agent')
+          print(agent.version)
+          ")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Run evaluation against production agent
         id: eval
@@ -28,7 +52,7 @@ jobs:
         with:
           azure-ai-project-endpoint: ${{ vars.FOUNDRY_PROD_ENDPOINT }}
           deployment-name:           ${{ vars.GPT_DEPLOYMENT }}
-          agent-ids:                 "tech-trends-agent:latest"
+          agent-ids:                 "tech-trends-agent:${{ steps.agent.outputs.version }}"
           data-path:                 "./evals/golden-dataset.json"
           evaluation-result-view:    "default"
 

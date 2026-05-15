@@ -111,6 +111,13 @@ def deploy_agent(env: str, tools: list, semver: str):
         json.dump(artifact, f, indent=2)
 
     print(f"Deployed {agent.version} | artifact -> {artifact_path}")
+
+    # Output for GitHub Actions
+    gh_output = os.environ.get("GITHUB_OUTPUT")
+    if gh_output:
+        with open(gh_output, "a") as f:
+            f.write(f"agent_version={agent.version}\n")
+
     return artifact, artifact_path
 
 
