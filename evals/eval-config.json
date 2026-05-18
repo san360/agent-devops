@@ -11,6 +11,6 @@
     "groundedness": 0.75,
     "coherence": 0.80
   },
-  "phase_filter": "1",
-  "notes": "Phase 1: Only web search queries evaluated. Phase 2 data analysis queries excluded."
+  "phase_filter": null,
+  "notes": "Phase 2: All queries evaluated — both web search (Phase 1) and data analysis (Phase 2)."
 }
