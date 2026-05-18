@@ -5,8 +5,12 @@
     "model": "${GPT_DEPLOYMENT}",
     "instructions_file": "prompts/tech-trends-agent.md",
     "tools": [
-      { "type": "web_search" },
-      { "type": "code_interpreter" }
+      {
+        "type": "web_search"
+      },
+      {
+        "type": "code_interpreter"
+      }
     ]
   },
   "eval": {
@@ -15,6 +19,17 @@
     "config": "evals/eval-config.json"
   },
   "_model_history": [
-    { "model": "gpt-4o-2024-11-20", "from": "2025-01-10", "to": null, "reason": "initial" }
+    {
+      "model": "gpt-4o-2024-11-20",
+      "from": "2025-01-10",
+      "to": "2026-05-18",
+      "reason": "initial"
+    },
+    {
+      "model": "gpt-4.1",
+      "from": "2026-05-18",
+      "to": null,
+      "reason": "quality improvement, eval gated"
+    }
   ]
 }
