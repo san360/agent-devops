@@ -1,6 +1,6 @@
-import hashlib
 import json
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,9 +12,11 @@ class TestRollbackFromArtifact:
     @patch("scripts.rollback_agent.WebSearchTool")
     def test_rollback_creates_new_version(
         self, MockWebSearch, MockClient, MockCred,
-        sample_artifact, mock_env
+        sample_artifact, mock_env, tmp_project, monkeypatch
     ):
         artifact_path, artifact_data = sample_artifact
+        monkeypatch.setattr("scripts.rollback_agent.AGENT_CONFIG",
+                            str(tmp_project / "agents" / "tech-trends-agent.json"))
 
         mock_agent = MagicMock()
         mock_agent.version = 10
@@ -34,9 +36,11 @@ class TestRollbackFromArtifact:
     @patch("scripts.rollback_agent.WebSearchTool")
     def test_rollback_uses_correct_model(
         self, MockWebSearch, MockClient, MockCred,
-        sample_artifact, mock_env
+        sample_artifact, mock_env, tmp_project, monkeypatch
     ):
         artifact_path, artifact_data = sample_artifact
+        monkeypatch.setattr("scripts.rollback_agent.AGENT_CONFIG",
+                            str(tmp_project / "agents" / "tech-trends-agent.json"))
 
         mock_agent = MagicMock()
         mock_agent.version = 11
@@ -52,18 +56,13 @@ class TestRollbackFromArtifact:
     @patch("scripts.rollback_agent.DefaultAzureCredential")
     @patch("scripts.rollback_agent.AIProjectClient")
     @patch("scripts.rollback_agent.WebSearchTool")
-    def test_rollback_warns_on_hash_mismatch(
+    def test_rollback_restores_agent_config(
         self, MockWebSearch, MockClient, MockCred,
-        sample_artifact, mock_env, tmp_project, capsys
+        sample_artifact, mock_env, tmp_project, monkeypatch
     ):
         artifact_path, artifact_data = sample_artifact
-
-        prompt_file = tmp_project / "prompts" / "tech-trends-agent.md"
-        prompt_file.write_text("# Changed prompt\nThis is different now.")
-
-        artifact_data["definition"]["instructions_file"] = str(prompt_file)
-        with open(artifact_path, "w") as f:
-            json.dump(artifact_data, f)
+        monkeypatch.setattr("scripts.rollback_agent.AGENT_CONFIG",
+                            str(tmp_project / "agents" / "tech-trends-agent.json"))
 
         mock_agent = MagicMock()
         mock_agent.version = 12
@@ -72,34 +71,10 @@ class TestRollbackFromArtifact:
         from scripts.rollback_agent import rollback_from_artifact
         rollback_from_artifact(artifact_path, "prod")
 
-        captured = capsys.readouterr()
-        assert "WARNING" in captured.out
-
-    @patch("scripts.rollback_agent.restore_prompt_from_git")
-    @patch("scripts.rollback_agent.DefaultAzureCredential")
-    @patch("scripts.rollback_agent.AIProjectClient")
-    @patch("scripts.rollback_agent.WebSearchTool")
-    def test_rollback_no_warning_when_hash_matches(
-        self, MockWebSearch, MockClient, MockCred, mock_restore,
-        sample_artifact, mock_env, capsys
-    ):
-        artifact_path, artifact_data = sample_artifact
-
-        # Simulate successful git restore with matching content
-        prompt_path = artifact_data["definition"]["instructions_file"]
-        prompt_content = open(prompt_path).read()
-        mock_restore.return_value = prompt_content
-
-        mock_agent = MagicMock()
-        mock_agent.version = 13
-        MockClient.return_value.agents.create_version.return_value = mock_agent
-
-        from scripts.rollback_agent import rollback_from_artifact
-        rollback_from_artifact(artifact_path, "prod")
-
-        captured = capsys.readouterr()
-        assert "WARNING" not in captured.out
-        assert "Restored prompt file" in captured.out
+        restored = json.loads((tmp_project / "agents" / "tech-trends-agent.json").read_text())
+        assert restored["agent_name"] == "tech-trends-agent"
+        assert restored["definition"]["model"] == artifact_data["definition"]["model"]
+        assert restored["definition"]["tools"] == artifact_data["definition"]["tools"]
 
 
 class TestRollbackToolReconstruction:
@@ -108,9 +83,11 @@ class TestRollbackToolReconstruction:
     @patch("scripts.rollback_agent.WebSearchTool")
     def test_reconstructs_web_search_tool(
         self, MockWebSearch, MockClient, MockCred,
-        sample_artifact, mock_env
+        sample_artifact, mock_env, tmp_project, monkeypatch
     ):
         artifact_path, _ = sample_artifact
+        monkeypatch.setattr("scripts.rollback_agent.AGENT_CONFIG",
+                            str(tmp_project / "agents" / "tech-trends-agent.json"))
 
         mock_agent = MagicMock()
         mock_agent.version = 14
@@ -127,9 +104,11 @@ class TestRollbackToolReconstruction:
     @patch("scripts.rollback_agent.WebSearchTool")
     def test_reconstructs_code_interpreter(
         self, MockWebSearch, MockClient, MockCred, MockCode,
-        sample_artifact, mock_env
+        sample_artifact, mock_env, tmp_project, monkeypatch
     ):
         artifact_path, artifact_data = sample_artifact
+        monkeypatch.setattr("scripts.rollback_agent.AGENT_CONFIG",
+                            str(tmp_project / "agents" / "tech-trends-agent.json"))
 
         artifact_data["definition"]["tools"].append({"type": "code_interpreter"})
         with open(artifact_path, "w") as f:
@@ -145,36 +124,31 @@ class TestRollbackToolReconstruction:
         MockCode.assert_called_once()
 
 
-class TestRollbackPromptRestoration:
-    @patch("scripts.rollback_agent.restore_prompt_from_git")
-    @patch("scripts.rollback_agent.DefaultAzureCredential")
-    @patch("scripts.rollback_agent.AIProjectClient")
-    @patch("scripts.rollback_agent.WebSearchTool")
-    def test_restores_prompt_file_from_git(
-        self, MockWebSearch, MockClient, MockCred, mock_restore,
-        sample_artifact, mock_env, tmp_project
-    ):
-        artifact_path, artifact_data = sample_artifact
+class TestRestoreDefaults:
+    def test_restore_defaults_copies_files(self, tmp_path, monkeypatch):
+        # Set up default files
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "prompts").mkdir()
 
-        # Current file has Phase 2 content
-        prompt_file = tmp_project / "prompts" / "tech-trends-agent.md"
-        prompt_file.write_text("# Phase 2 prompt\nWith data analysis.")
+        default_config = tmp_path / "agents" / "tech-trends-agent.default.json"
+        default_config.write_text('{"agent_name": "tech-trends-agent", "definition": {"tools": []}}')
 
-        # Git restore returns the original Phase 1 content
-        original_content = "# Phase 1 prompt\nWeb search only."
-        mock_restore.return_value = original_content
+        default_prompt = tmp_path / "prompts" / "tech-trends-agent.default.md"
+        default_prompt.write_text("# Default prompt")
 
-        mock_agent = MagicMock()
-        mock_agent.version = 20
-        MockClient.return_value.agents.create_version.return_value = mock_agent
+        active_config = tmp_path / "agents" / "tech-trends-agent.json"
+        active_config.write_text('{"agent_name": "tech-trends-agent", "definition": {"tools": [{"type": "web_search"}]}}')
 
-        from scripts.rollback_agent import rollback_from_artifact
-        rollback_from_artifact(artifact_path, "prod")
+        active_prompt = tmp_path / "prompts" / "tech-trends-agent.md"
+        active_prompt.write_text("# Modified prompt")
 
-        # Verify the prompt file was restored on disk
-        assert prompt_file.read_text() == original_content
+        monkeypatch.setattr("scripts.rollback_agent.AGENT_CONFIG", str(active_config))
+        monkeypatch.setattr("scripts.rollback_agent.AGENT_DEFAULT", str(default_config))
+        monkeypatch.setattr("scripts.rollback_agent.PROMPT_FILE", str(active_prompt))
+        monkeypatch.setattr("scripts.rollback_agent.PROMPT_DEFAULT", str(default_prompt))
 
-        # Verify the restored content was sent to Foundry
-        call_kwargs = MockClient.return_value.agents.create_version.call_args
-        definition = call_kwargs.kwargs["definition"]
-        assert definition.instructions == original_content
+        from scripts.rollback_agent import restore_defaults
+        restore_defaults()
+
+        assert json.loads(active_config.read_text())["definition"]["tools"] == []
+        assert active_prompt.read_text() == "# Default prompt"

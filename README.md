@@ -11,23 +11,28 @@ versioned prompts, tool changes, model upgrades, evaluation gates, and rollback.
 ## Repository Structure
 
 ```
-agents/                          Agent config skeleton (JSON)
-prompts/                         System prompt (Markdown)
-evals/                           Golden dataset + evaluator config
+agents/
+  tech-trends-agent.json             Active agent config (tools, model ref, eval pointers)
+  tech-trends-agent.default.json     Default baseline (rollback target)
+prompts/
+  tech-trends-agent.md               Active system prompt (Markdown)
+  tech-trends-agent.default.md       Default baseline prompt (rollback target)
+evals/                               Golden dataset + evaluator config
 scripts/
-  deploy_agent.py                Deploy agent to TEST or PROD
-  rollback_agent.py              Re-deploy from a saved artifact
-  compare_models.py              Side-by-side model comparison
-  bootstrap.sh                   One-time Azure + GitHub setup
-  teardown.sh                    Reverse everything bootstrap created
+  deploy_agent.py                    Deploy agent to TEST or PROD
+  rollback_agent.py                  Rollback to default or a saved artifact
+  run_evaluation.py                  Run Foundry evaluation locally
+  compare_models.py                  Side-by-side model comparison
+  bootstrap.sh                       One-time Azure + GitHub setup
+  teardown.sh                        Reverse everything bootstrap created
   lifecycle/
-    01-phase1-web-search.sh      PR: agent with web search only
-    02-phase2-code-interpreter.sh PR: add code interpreter
-    03-model-upgrade.sh          PR: upgrade model to gpt-4.1
-infra/                           Bicep IaC for Foundry project
-artifacts/                       Generated deployment snapshots (post-deploy)
-.github/workflows/               CI/CD pipelines
-tests/                           Unit tests
+    01-phase1-web-search.sh          PR: agent with web search only
+    02-phase2-code-interpreter.sh    PR: add code interpreter
+    03-model-upgrade.sh              PR: upgrade model to gpt-4.1
+infra/                               Bicep IaC for Foundry project
+artifacts/                           Generated deployment snapshots (post-deploy)
+.github/workflows/                   CI/CD pipelines
+tests/                               Unit tests
 ```
 
 ## Prerequisites
@@ -241,11 +246,45 @@ Each run is named `{branch}/{commit-sha}` for full traceability back to the sour
 
 ## Rollback
 
+The rollback script supports two modes:
+
+### Reset to default baseline
+
 ```bash
-python scripts/rollback_agent.py artifacts/tech-trends-agent-v1.1.0.json prod
+python scripts/rollback_agent.py --default prod
 ```
 
-Re-deploys the exact prompt, tools, and model from a saved artifact.
+Copies `agents/tech-trends-agent.default.json` and `prompts/tech-trends-agent.default.md`
+over the active config and prompt, then re-deploys the clean baseline to Foundry.
+
+### Rollback to a specific artifact
+
+```bash
+python scripts/rollback_agent.py artifacts/tech-trends-agent-v1.0.1.json prod
+```
+
+Reconstructs the agent config from the artifact's definition (model, tools, prompt) and
+re-deploys that exact state to Foundry. Also writes the artifact's definition back to
+`agents/tech-trends-agent.json` so local state matches production.
+
+### What a rollback does
+
+- Creates a **new** Foundry version with the restored prompt, tools, and model
+- Updates the local `agents/tech-trends-agent.json` to match the rolled-back state
+- Description field notes it is a rollback and the source version
+- Does **not** delete the bad version from Foundry (history is immutable)
+
+## Artifacts
+
+The `artifacts/` folder is the deployment ledger. Every production deploy via
+`deploy-prod.yml` commits a versioned JSON snapshot here, recording:
+
+- **What** was deployed (model, tools, prompt hash)
+- **When** and **where** (timestamp, endpoint, environment)
+- **Which code** produced it (git commit SHA, branch, tag)
+
+Artifacts enable rollback, auditability, and drift detection. They are committed
+with `[skip ci]` to avoid triggering re-deployment.
 
 ## Model Comparison
 

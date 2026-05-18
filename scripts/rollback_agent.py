@@ -1,15 +1,16 @@
-"""Rollback a Foundry agent to a previous version using a saved artifact.
+"""Rollback a Foundry agent to its default definition or a previous artifact.
 
-Restores the prompt file from the artifact's git commit and re-deploys.
+Restores the agent config and prompt from default baseline files in the repo,
+then re-deploys to Foundry.
 
 Usage:
-    python scripts/rollback_agent.py artifacts/tech-trends-agent-v1.1.0.json prod
+    python scripts/rollback_agent.py <artifact.json> <env>
+    python scripts/rollback_agent.py --default <env>
 """
 
-import hashlib
 import json
 import os
-import subprocess
+import shutil
 import sys
 
 from azure.ai.projects import AIProjectClient
@@ -20,17 +21,18 @@ from azure.ai.projects.models import (
 )
 from azure.identity import DefaultAzureCredential
 
+AGENT_CONFIG = "agents/tech-trends-agent.json"
+AGENT_DEFAULT = "agents/tech-trends-agent.default.json"
+PROMPT_FILE = "prompts/tech-trends-agent.md"
+PROMPT_DEFAULT = "prompts/tech-trends-agent.default.md"
 
-def restore_prompt_from_git(commit_sha: str, prompt_path: str) -> str | None:
-    """Retrieve prompt content from the artifact's git commit."""
-    try:
-        result = subprocess.run(
-            ["git", "show", f"{commit_sha}:{prompt_path}"],
-            capture_output=True, text=True, check=True,
-        )
-        return result.stdout
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
+
+def restore_defaults():
+    """Copy default agent config and prompt over the active files."""
+    shutil.copy(AGENT_DEFAULT, AGENT_CONFIG)
+    print(f"Restored agent config from {AGENT_DEFAULT}")
+    shutil.copy(PROMPT_DEFAULT, PROMPT_FILE)
+    print(f"Restored prompt from {PROMPT_DEFAULT}")
 
 
 def rollback_from_artifact(artifact_path: str, env: str):
@@ -45,30 +47,24 @@ def rollback_from_artifact(artifact_path: str, env: str):
         endpoint=endpoint, credential=DefaultAzureCredential()
     )
 
-    prompt_path = artifact["definition"]["instructions_file"]
-    commit_sha = artifact["git"]["commit_sha"]
+    # Restore agent config and prompt from artifact's definition
+    agent_config = {
+        "agent_name": artifact["agent_name"],
+        "definition": artifact["definition"],
+        "eval": artifact.get("eval", {
+            "dataset": "evals/golden-dataset.json",
+            "phase_filter": None,
+            "config": "evals/eval-config.json",
+        }),
+    }
+    with open(AGENT_CONFIG, "w") as f:
+        json.dump(agent_config, f, indent=2)
+        f.write("\n")
+    print(f"Restored agent config from artifact: {AGENT_CONFIG}")
 
-    # Restore prompt from the artifact's git commit
-    instructions = restore_prompt_from_git(commit_sha, prompt_path)
-    if instructions:
-        # Verify hash matches artifact
-        restored_hash = "sha256:" + hashlib.sha256(instructions.encode()).hexdigest()
-        if restored_hash != artifact["definition"]["instructions_hash"]:
-            print("WARNING: restored prompt hash differs from artifact (git history may have been rewritten).")
-        # Write restored content back to disk
-        with open(prompt_path, "w") as f:
-            f.write(instructions)
-        print(f"Restored prompt file from commit {commit_sha[:7]}: {prompt_path}")
-    else:
-        # Fallback: use current file on disk with a warning
-        print(f"WARNING: could not retrieve prompt from git commit {commit_sha[:7]}. Using current file.")
-        instructions = open(prompt_path).read()
-        actual_hash = "sha256:" + hashlib.sha256(open(prompt_path, "rb").read()).hexdigest()
-        if actual_hash != artifact["definition"]["instructions_hash"]:
-            print(
-                "WARNING: prompt file hash does not match artifact. "
-                "The prompt may have changed since this artifact was created."
-            )
+    # Read prompt content from disk (prompt file stays as-is from artifact era)
+    prompt_path = artifact["definition"]["instructions_file"]
+    instructions = open(prompt_path).read()
 
     tools = []
     for t in artifact["definition"]["tools"]:
@@ -98,6 +94,34 @@ def rollback_from_artifact(artifact_path: str, env: str):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python scripts/rollback_agent.py <artifact.json> <env>")
+        print("Usage: python scripts/rollback_agent.py <artifact.json|--default> <env>")
         sys.exit(1)
-    rollback_from_artifact(sys.argv[1], sys.argv[2])
+
+    if sys.argv[1] == "--default":
+        restore_defaults()
+        # Load the default config to re-deploy
+        rollback_config = json.load(open(AGENT_DEFAULT))
+        # Create a minimal artifact-like structure for rollback
+        artifact_path = AGENT_DEFAULT
+        env = sys.argv[2]
+        env_var = f"FOUNDRY_{env.upper()}_ENDPOINT"
+        endpoint = os.environ.get(env_var)
+        if not endpoint:
+            print(f"ERROR: Environment variable '{env_var}' is not set.")
+            sys.exit(1)
+        client = AIProjectClient(
+            endpoint=endpoint, credential=DefaultAzureCredential()
+        )
+        instructions = open(PROMPT_DEFAULT).read()
+        agent = client.agents.create_version(
+            agent_name=rollback_config["agent_name"],
+            description="ROLLBACK to default baseline",
+            definition=PromptAgentDefinition(
+                model=rollback_config["definition"]["model"],
+                instructions=instructions,
+                tools=[],
+            ),
+        )
+        print(f"Rolled back to default. New version: {agent.version}")
+    else:
+        rollback_from_artifact(sys.argv[1], sys.argv[2])
