@@ -75,14 +75,20 @@ class TestRollbackFromArtifact:
         captured = capsys.readouterr()
         assert "WARNING" in captured.out
 
+    @patch("scripts.rollback_agent.restore_prompt_from_git")
     @patch("scripts.rollback_agent.DefaultAzureCredential")
     @patch("scripts.rollback_agent.AIProjectClient")
     @patch("scripts.rollback_agent.WebSearchTool")
     def test_rollback_no_warning_when_hash_matches(
-        self, MockWebSearch, MockClient, MockCred,
+        self, MockWebSearch, MockClient, MockCred, mock_restore,
         sample_artifact, mock_env, capsys
     ):
-        artifact_path, _ = sample_artifact
+        artifact_path, artifact_data = sample_artifact
+
+        # Simulate successful git restore with matching content
+        prompt_path = artifact_data["definition"]["instructions_file"]
+        prompt_content = open(prompt_path).read()
+        mock_restore.return_value = prompt_content
 
         mock_agent = MagicMock()
         mock_agent.version = 13
@@ -93,6 +99,7 @@ class TestRollbackFromArtifact:
 
         captured = capsys.readouterr()
         assert "WARNING" not in captured.out
+        assert "Restored prompt file" in captured.out
 
 
 class TestRollbackToolReconstruction:
@@ -136,3 +143,38 @@ class TestRollbackToolReconstruction:
         rollback_from_artifact(artifact_path, "prod")
 
         MockCode.assert_called_once()
+
+
+class TestRollbackPromptRestoration:
+    @patch("scripts.rollback_agent.restore_prompt_from_git")
+    @patch("scripts.rollback_agent.DefaultAzureCredential")
+    @patch("scripts.rollback_agent.AIProjectClient")
+    @patch("scripts.rollback_agent.WebSearchTool")
+    def test_restores_prompt_file_from_git(
+        self, MockWebSearch, MockClient, MockCred, mock_restore,
+        sample_artifact, mock_env, tmp_project
+    ):
+        artifact_path, artifact_data = sample_artifact
+
+        # Current file has Phase 2 content
+        prompt_file = tmp_project / "prompts" / "tech-trends-agent.md"
+        prompt_file.write_text("# Phase 2 prompt\nWith data analysis.")
+
+        # Git restore returns the original Phase 1 content
+        original_content = "# Phase 1 prompt\nWeb search only."
+        mock_restore.return_value = original_content
+
+        mock_agent = MagicMock()
+        mock_agent.version = 20
+        MockClient.return_value.agents.create_version.return_value = mock_agent
+
+        from scripts.rollback_agent import rollback_from_artifact
+        rollback_from_artifact(artifact_path, "prod")
+
+        # Verify the prompt file was restored on disk
+        assert prompt_file.read_text() == original_content
+
+        # Verify the restored content was sent to Foundry
+        call_kwargs = MockClient.return_value.agents.create_version.call_args
+        definition = call_kwargs.kwargs["definition"]
+        assert definition.instructions == original_content
