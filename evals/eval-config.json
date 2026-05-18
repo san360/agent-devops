@@ -10,5 +10,7 @@
     "relevance": 0.75,
     "groundedness": 0.75,
     "coherence": 0.80
-  }
+  },
+  "phase_filter": "1",
+  "notes": "Phase 1: Only web search queries evaluated. Phase 2 data analysis queries excluded."
 }
