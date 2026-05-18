@@ -16,6 +16,7 @@ Usage:
 import argparse
 import json
 import os
+import sys
 import time
 
 from azure.ai.projects import AIProjectClient
@@ -175,18 +176,21 @@ def main():
     project_client = AIProjectClient(endpoint=endpoint, credential=credential)
     openai_client = project_client.get_openai_client()
 
-    # Load evaluators from dataset file
-    with open(args.data_path) as f:
-        input_data = json.load(f)
-    evaluators = input_data.get("evaluators", [])
-
-    # Load phase_filter from eval config (set by lifecycle scripts)
+    # Load eval config (authoritative source for evaluators and phase_filter)
     eval_config_path = "evals/eval-config.json"
     phase_filter = None
+    evaluators = []
     if os.path.exists(eval_config_path):
         with open(eval_config_path) as f:
             eval_config = json.load(f)
+        evaluators = eval_config.get("evaluators", [])
         phase_filter = eval_config.get("phase_filter")
+
+    # Fallback: read evaluators from golden dataset if not in eval-config
+    if not evaluators:
+        with open(args.data_path) as f:
+            input_data = json.load(f)
+        evaluators = input_data.get("evaluators", [])
 
     # Evaluation name is based on agent name (stable across runs)
     eval_name = f"{args.agent_name}-eval"

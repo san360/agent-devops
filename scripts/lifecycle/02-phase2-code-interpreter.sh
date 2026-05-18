@@ -99,10 +99,10 @@ PROMPT_EOF
 cat > evals/eval-config.json << 'EVAL_EOF'
 {
   "evaluators": [
-    "TaskAdherenceEvaluator",
-    "RelevanceEvaluator",
-    "GroundednessEvaluator",
-    "CoherenceEvaluator"
+    "builtin.task_adherence",
+    "builtin.relevance",
+    "builtin.groundedness",
+    "builtin.coherence"
   ],
   "thresholds": {
     "task_adherence": 0.80,
