@@ -26,7 +26,7 @@ git pull origin main
 # Create feature branch
 git checkout -b "$BRANCH"
 
-# --- Agent config: Phase 2, code_interpreter only ---
+# --- Agent config: Phase 2, web_search + code_interpreter ---
 cat > agents/tech-trends-agent.json << 'AGENT_EOF'
 {
   "agent_name": "tech-trends-agent",
@@ -35,6 +35,7 @@ cat > agents/tech-trends-agent.json << 'AGENT_EOF'
     "model": "${GPT_DEPLOYMENT}",
     "instructions_file": "prompts/tech-trends-agent.md",
     "tools": [
+      { "type": "web_search" },
       { "type": "code_interpreter" }
     ]
   },
@@ -125,14 +126,14 @@ PR_URL=$(gh pr create \
   --title "Phase 2: Add Code Interpreter for Data Analysis" \
   --body "$(cat <<'PR_EOF'
 ## Summary
-- Replaces `web_search` tool with `code_interpreter` for data analysis
+- Adds `code_interpreter` tool alongside existing `web_search`
 - Extends system prompt with `## Data Analysis` section
 - Evaluation now runs **all 8 queries** (Phase 1 + Phase 2)
 
 ## Changes
 | File | Change |
 |---|---|
-| `agents/tech-trends-agent.json` | Replaced `web_search` with `code_interpreter`, phase → `"2"` |
+| `agents/tech-trends-agent.json` | Added `code_interpreter` alongside `web_search`, phase → `"2"` |
 | `prompts/tech-trends-agent.md` | Added `## Data Analysis (Phase 2)` section |
 | `evals/eval-config.json` | `phase_filter` → `null` (run all cases) |
 

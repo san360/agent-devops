@@ -32,27 +32,26 @@ class TestHashFile:
 
 
 class TestBuildSdkTools:
-    @patch("scripts.deploy_agent.BingGroundingTool")
-    def test_builds_bing_tool(self, MockBing):
+    @patch("scripts.deploy_agent.WebSearchTool")
+    def test_builds_web_search_tool(self, MockWebSearch):
         from scripts.deploy_agent import build_sdk_tools
-        tools = [{"type": "bing_grounding"}]
-        result = build_sdk_tools(tools, "my-conn")
-        MockBing.assert_called_once_with(connection_id="my-conn")
+        tools = [{"type": "web_search"}]
+        result = build_sdk_tools(tools)
+        MockWebSearch.assert_called_once()
         assert len(result) == 1
 
     @patch("scripts.deploy_agent.CodeInterpreterTool")
-    @patch("scripts.deploy_agent.BingGroundingTool")
-    def test_builds_multiple_tools(self, MockBing, MockCode):
+    @patch("scripts.deploy_agent.WebSearchTool")
+    def test_builds_multiple_tools(self, MockWebSearch, MockCode):
         from scripts.deploy_agent import build_sdk_tools
-        tools = [{"type": "bing_grounding"}, {"type": "code_interpreter"}]
-        result = build_sdk_tools(tools, "conn")
+        tools = [{"type": "web_search"}, {"type": "code_interpreter"}]
+        result = build_sdk_tools(tools)
         assert len(result) == 2
 
-    @patch("scripts.deploy_agent.BingGroundingTool")
-    def test_ignores_unknown_tool_type(self, MockBing):
+    def test_ignores_unknown_tool_type(self):
         from scripts.deploy_agent import build_sdk_tools
         tools = [{"type": "unknown_tool"}]
-        result = build_sdk_tools(tools, "conn")
+        result = build_sdk_tools(tools)
         assert len(result) == 0
 
 
@@ -77,7 +76,7 @@ class TestDeployAgent:
             from scripts.deploy_agent import deploy_agent
             artifact, path = deploy_agent(
                 env="test",
-                tools=[{"type": "bing_grounding"}],
+                tools=[{"type": "web_search"}],
                 semver="1.0.0",
             )
         finally:
@@ -90,7 +89,7 @@ class TestDeployAgent:
         assert artifact["git"]["commit_sha"] == "a" * 40
         assert artifact["git"]["short_sha"] == "a" * 7
         assert artifact["definition"]["model"] == "gpt-4o-2024-11-20"
-        assert artifact["definition"]["tools"] == [{"type": "bing_grounding"}]
+        assert artifact["definition"]["tools"] == [{"type": "web_search"}]
         assert artifact["definition"]["instructions_hash"].startswith("sha256:")
         assert artifact["deployment"]["environment"] == "test"
 
@@ -114,7 +113,7 @@ class TestDeployAgent:
             from scripts.deploy_agent import deploy_agent
             artifact, path = deploy_agent(
                 env="test",
-                tools=[{"type": "bing_grounding"}],
+                tools=[{"type": "web_search"}],
                 semver="2.0.0",
             )
         finally:
@@ -144,14 +143,14 @@ class TestDeployAgent:
             from scripts.deploy_agent import deploy_agent
             artifact, _ = deploy_agent(
                 env="test",
-                tools=[{"type": "bing_grounding"}, {"type": "code_interpreter"}],
+                tools=[{"type": "web_search"}, {"type": "code_interpreter"}],
                 semver="1.1.0",
             )
         finally:
             os.chdir(old_cwd)
 
         desc = artifact["description"]
-        assert "bing_grounding,code_interpreter" in desc
+        assert "web_search,code_interpreter" in desc
         assert "gpt-4o-2024-11-20" in desc
         assert "v1.1.0" in desc
         assert "c" * 7 in desc

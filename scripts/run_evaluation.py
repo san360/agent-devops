@@ -82,10 +82,11 @@ def create_evaluation(openai_client, eval_name: str, evaluators: list, deploymen
 
 
 def create_eval_run(openai_client, project_client, eval_id: str, run_name: str,
-                    agent_name: str, agent_version: str, data_path: str):
+                    agent_name: str, agent_version: str, data_path: str,
+                    phase_filter: str | None = None):
     """Create a run against an existing evaluation."""
     # Upload dataset
-    jsonl_path = convert_to_jsonl(data_path)
+    jsonl_path = convert_to_jsonl(data_path, phase_filter)
     dataset = project_client.datasets.upload_file(
         name=f"{agent_name}-eval-data",
         version=str(int(time.time())),
@@ -121,14 +122,19 @@ def create_eval_run(openai_client, project_client, eval_id: str, run_name: str,
     return eval_run
 
 
-def convert_to_jsonl(data_path: str) -> str:
-    """Convert JSON dataset to JSONL format for upload."""
+def convert_to_jsonl(data_path: str, phase_filter: str | None = None) -> str:
+    """Convert JSON dataset to JSONL format for upload, optionally filtering by phase."""
     with open(data_path) as f:
         data = json.load(f)
 
+    items = data["data"]
+    if phase_filter:
+        items = [item for item in items if item.get("phase") == phase_filter]
+        print(f"Phase filter '{phase_filter}': {len(items)}/{len(data['data'])} queries selected")
+
     jsonl_path = data_path.replace(".json", ".jsonl")
     with open(jsonl_path, "w") as f:
-        for item in data["data"]:
+        for item in items:
             f.write(json.dumps(item) + "\n")
 
     return jsonl_path
@@ -174,6 +180,14 @@ def main():
         input_data = json.load(f)
     evaluators = input_data.get("evaluators", [])
 
+    # Load phase_filter from eval config (set by lifecycle scripts)
+    eval_config_path = "evals/eval-config.json"
+    phase_filter = None
+    if os.path.exists(eval_config_path):
+        with open(eval_config_path) as f:
+            eval_config = json.load(f)
+        phase_filter = eval_config.get("phase_filter")
+
     # Evaluation name is based on agent name (stable across runs)
     eval_name = f"{args.agent_name}-eval"
 
@@ -192,6 +206,7 @@ def main():
     eval_run = create_eval_run(
         openai_client, project_client, eval_obj.id, run_name,
         args.agent_name, args.agent_version, args.data_path,
+        phase_filter=phase_filter,
     )
     completed_run = wait_for_run(openai_client, eval_obj.id, eval_run.id)
 

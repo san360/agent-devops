@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 from datetime import datetime, timezone
 
 from azure.ai.projects import AIProjectClient
@@ -141,5 +142,5 @@ if __name__ == "__main__":
     )
     args = p.parse_args()
 
-    tools = [{"type": t.strip()} for t in args.tools.split(",")]
+    tools = [{"type": t.strip()} for t in args.tools.split(",") if t.strip()]
     deploy_agent(args.env, tools, args.semver)

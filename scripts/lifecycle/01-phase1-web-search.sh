@@ -24,7 +24,7 @@ git pull origin main
 # Create feature branch
 git checkout -b "$BRANCH"
 
-# --- Agent config: Phase 1, bing_grounding only ---
+# --- Agent config: Phase 1, web_search only ---
 cat > agents/tech-trends-agent.json << 'AGENT_EOF'
 {
   "agent_name": "tech-trends-agent",
