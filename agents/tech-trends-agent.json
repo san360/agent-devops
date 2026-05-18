@@ -1,16 +1,17 @@
 {
   "agent_name": "tech-trends-agent",
-  "phase": "1",
+  "phase": "2",
   "definition": {
     "model": "${GPT_DEPLOYMENT}",
     "instructions_file": "prompts/tech-trends-agent.md",
     "tools": [
-      { "type": "web_search" }
+      { "type": "web_search" },
+      { "type": "code_interpreter" }
     ]
   },
   "eval": {
     "dataset": "evals/golden-dataset.json",
-    "phase_filter": "1",
+    "phase_filter": null,
     "config": "evals/eval-config.json"
   },
   "_model_history": [
