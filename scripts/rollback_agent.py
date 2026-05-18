@@ -11,16 +11,21 @@ import sys
 
 from azure.ai.projects import AIProjectClient
 from azure.ai.projects.models import (
-    BingGroundingTool,
     CodeInterpreterTool,
     PromptAgentDefinition,
+    WebSearchTool,
 )
 from azure.identity import DefaultAzureCredential
 
 
 def rollback_from_artifact(artifact_path: str, env: str):
     artifact = json.load(open(artifact_path))
-    endpoint = os.environ[f"FOUNDRY_{env.upper()}_ENDPOINT"]
+    env_var = f"FOUNDRY_{env.upper()}_ENDPOINT"
+    endpoint = os.environ.get(env_var)
+    if not endpoint:
+        print(f"ERROR: Environment variable '{env_var}' is not set.")
+        print("Please add it to your .env file (see .env.example) and run: source .env")
+        sys.exit(1)
     client = AIProjectClient(
         endpoint=endpoint, credential=DefaultAzureCredential()
     )
@@ -36,10 +41,9 @@ def rollback_from_artifact(artifact_path: str, env: str):
         )
 
     tools = []
-    conn_name = os.environ.get("BING_CONNECTION_NAME", "bing-grounding")
     for t in artifact["definition"]["tools"]:
-        if t["type"] == "bing_grounding":
-            tools.append(BingGroundingTool(connection_id=conn_name))
+        if t["type"] == "web_search":
+            tools.append(WebSearchTool())
         elif t["type"] == "code_interpreter":
             tools.append(CodeInterpreterTool())
 

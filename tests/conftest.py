@@ -23,7 +23,7 @@ def tmp_project(tmp_path):
         "definition": {
             "model": "${GPT_DEPLOYMENT}",
             "instructions_file": "prompts/tech-trends-agent.md",
-            "tools": [{"type": "bing_grounding"}],
+            "tools": [{"type": "web_search"}],
         },
         "eval": {
             "dataset": "evals/golden-dataset.json",
@@ -88,9 +88,9 @@ def sample_artifact(tmp_project):
             "model": "gpt-4o-2024-11-20",
             "instructions_file": str(tmp_project / "prompts" / "tech-trends-agent.md"),
             "instructions_hash": "",
-            "tools": [{"type": "bing_grounding"}],
+            "tools": [{"type": "web_search"}],
         },
-        "description": "Tech Trend Research Agent | tools: bing_grounding | model: gpt-4o-2024-11-20 | commit: aaaaaaa | v1.0.0",
+        "description": "Tech Trend Research Agent | tools: web_search | model: gpt-4o-2024-11-20 | commit: aaaaaaa | v1.0.0",
         "deployment": {
             "environment": "prod",
             "foundry_endpoint": "https://prod.endpoint.example.com",

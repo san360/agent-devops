@@ -9,9 +9,9 @@ import pytest
 class TestRollbackFromArtifact:
     @patch("scripts.rollback_agent.DefaultAzureCredential")
     @patch("scripts.rollback_agent.AIProjectClient")
-    @patch("scripts.rollback_agent.BingGroundingTool")
+    @patch("scripts.rollback_agent.WebSearchTool")
     def test_rollback_creates_new_version(
-        self, MockBing, MockClient, MockCred,
+        self, MockWebSearch, MockClient, MockCred,
         sample_artifact, mock_env
     ):
         artifact_path, artifact_data = sample_artifact
@@ -31,9 +31,9 @@ class TestRollbackFromArtifact:
 
     @patch("scripts.rollback_agent.DefaultAzureCredential")
     @patch("scripts.rollback_agent.AIProjectClient")
-    @patch("scripts.rollback_agent.BingGroundingTool")
+    @patch("scripts.rollback_agent.WebSearchTool")
     def test_rollback_uses_correct_model(
-        self, MockBing, MockClient, MockCred,
+        self, MockWebSearch, MockClient, MockCred,
         sample_artifact, mock_env
     ):
         artifact_path, artifact_data = sample_artifact
@@ -51,9 +51,9 @@ class TestRollbackFromArtifact:
 
     @patch("scripts.rollback_agent.DefaultAzureCredential")
     @patch("scripts.rollback_agent.AIProjectClient")
-    @patch("scripts.rollback_agent.BingGroundingTool")
+    @patch("scripts.rollback_agent.WebSearchTool")
     def test_rollback_warns_on_hash_mismatch(
-        self, MockBing, MockClient, MockCred,
+        self, MockWebSearch, MockClient, MockCred,
         sample_artifact, mock_env, tmp_project, capsys
     ):
         artifact_path, artifact_data = sample_artifact
@@ -77,9 +77,9 @@ class TestRollbackFromArtifact:
 
     @patch("scripts.rollback_agent.DefaultAzureCredential")
     @patch("scripts.rollback_agent.AIProjectClient")
-    @patch("scripts.rollback_agent.BingGroundingTool")
+    @patch("scripts.rollback_agent.WebSearchTool")
     def test_rollback_no_warning_when_hash_matches(
-        self, MockBing, MockClient, MockCred,
+        self, MockWebSearch, MockClient, MockCred,
         sample_artifact, mock_env, capsys
     ):
         artifact_path, _ = sample_artifact
@@ -98,9 +98,9 @@ class TestRollbackFromArtifact:
 class TestRollbackToolReconstruction:
     @patch("scripts.rollback_agent.DefaultAzureCredential")
     @patch("scripts.rollback_agent.AIProjectClient")
-    @patch("scripts.rollback_agent.BingGroundingTool")
-    def test_reconstructs_bing_tool(
-        self, MockBing, MockClient, MockCred,
+    @patch("scripts.rollback_agent.WebSearchTool")
+    def test_reconstructs_web_search_tool(
+        self, MockWebSearch, MockClient, MockCred,
         sample_artifact, mock_env
     ):
         artifact_path, _ = sample_artifact
@@ -112,14 +112,14 @@ class TestRollbackToolReconstruction:
         from scripts.rollback_agent import rollback_from_artifact
         rollback_from_artifact(artifact_path, "prod")
 
-        MockBing.assert_called_once_with(connection_id="bing-grounding")
+        MockWebSearch.assert_called_once()
 
     @patch("scripts.rollback_agent.CodeInterpreterTool")
     @patch("scripts.rollback_agent.DefaultAzureCredential")
     @patch("scripts.rollback_agent.AIProjectClient")
-    @patch("scripts.rollback_agent.BingGroundingTool")
+    @patch("scripts.rollback_agent.WebSearchTool")
     def test_reconstructs_code_interpreter(
-        self, MockBing, MockClient, MockCred, MockCode,
+        self, MockWebSearch, MockClient, MockCred, MockCode,
         sample_artifact, mock_env
     ):
         artifact_path, artifact_data = sample_artifact

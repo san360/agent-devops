@@ -154,8 +154,16 @@ def main():
     parser.add_argument("--branch", required=True, help="Git branch name")
     args = parser.parse_args()
 
-    endpoint = os.environ["FOUNDRY_TEST_ENDPOINT"]
-    deployment_name = os.environ["GPT_DEPLOYMENT"]
+    endpoint = os.environ.get("FOUNDRY_TEST_ENDPOINT")
+    if not endpoint:
+        print("ERROR: Environment variable 'FOUNDRY_TEST_ENDPOINT' is not set.")
+        print("Please add it to your .env file (see .env.example) and run: source .env")
+        sys.exit(1)
+    deployment_name = os.environ.get("GPT_DEPLOYMENT")
+    if not deployment_name:
+        print("ERROR: Environment variable 'GPT_DEPLOYMENT' is not set.")
+        print("Please add it to your .env file (see .env.example) and run: source .env")
+        sys.exit(1)
 
     credential = DefaultAzureCredential()
     project_client = AIProjectClient(endpoint=endpoint, credential=credential)

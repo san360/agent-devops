@@ -48,8 +48,17 @@ def build_sdk_tools(tools):
 
 
 def deploy_agent(env: str, tools: list, semver: str):
-    endpoint = os.environ[f"FOUNDRY_{env.upper()}_ENDPOINT"]
-    model = os.environ["GPT_DEPLOYMENT"]
+    env_var = f"FOUNDRY_{env.upper()}_ENDPOINT"
+    endpoint = os.environ.get(env_var)
+    if not endpoint:
+        print(f"ERROR: Environment variable '{env_var}' is not set.")
+        print("Please add it to your .env file (see .env.example) and run: source .env")
+        sys.exit(1)
+    model = os.environ.get("GPT_DEPLOYMENT")
+    if not model:
+        print("ERROR: Environment variable 'GPT_DEPLOYMENT' is not set.")
+        print("Please add it to your .env file (see .env.example) and run: source .env")
+        sys.exit(1)
 
     prompt_path = "prompts/tech-trends-agent.md"
     instructions = open(prompt_path).read()

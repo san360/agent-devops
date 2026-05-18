@@ -204,12 +204,14 @@ pip install -r requirements.txt
 # 2. Configure environment
 cp .env.example .env
 # Edit .env with your Foundry endpoints and deployment names
+# Ensure each variable is prefixed with 'export' so they are
+# visible to Python (os.environ) when sourced.
 
 # 3. Login to Azure
 az login
 
 # 4. Deploy to test
-source .env  # or export vars manually
+source .env
 python scripts/deploy_agent.py --env test --semver 1.0.0 --tools web_search
 ```
 
