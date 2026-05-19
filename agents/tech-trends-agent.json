@@ -1,13 +1,19 @@
 {
   "agent_name": "tech-trends-agent",
+  "phase": "1",
   "definition": {
     "model": "${GPT_DEPLOYMENT}",
     "instructions_file": "prompts/tech-trends-agent.md",
-    "tools": []
+    "tools": [
+      { "type": "web_search" }
+    ]
   },
   "eval": {
     "dataset": "evals/golden-dataset.json",
-    "phase_filter": null,
+    "phase_filter": "1",
     "config": "evals/eval-config.json"
-  }
+  },
+  "_model_history": [
+    { "model": "gpt-4o-2024-11-20", "from": "2025-01-10", "to": null, "reason": "initial" }
+  ]
 }
